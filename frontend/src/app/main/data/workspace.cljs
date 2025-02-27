@@ -200,6 +200,7 @@
     ptk/WatchEvent
     (watch [_ state _]
       (let [features (features/get-team-enabled-features state)]
+        (log/debug :hint "fetch-libraries" :file-id file-id :features features)
         (->> (rp/cmd! :get-file-libraries {:file-id file-id})
              (rx/mapcat
               (fn [libraries]
@@ -245,6 +246,7 @@
     ptk/UpdateEvent
     (update [_ state]
       (let [file-id (:id file)]
+        (log/dbg :hint "update-bundle" :file-id file-id)
         (-> state
             (assoc :thumbnails thumbnails)
             (update :files assoc file-id file))))
@@ -254,6 +256,7 @@
       (let [team-id    (:current-team-id state)
             file-id    (:id file)]
 
+        (log/dbg :hint "watch-bundle" :file-id file-id)
         (rx/of (dwn/initialize team-id file-id)
                (dwsl/initialize-shape-layout)
                (fetch-libraries file-id))))))
@@ -285,11 +288,12 @@
 
 (defn- fetch-bundle
   "Multi-stage file bundle fetch coordinator"
-  [file-id]
+  [file-id features]
+  (log/debug :hint "fetch-bundle" :file-id file-id :features features)
   (ptk/reify ::fetch-bundle
     ptk/WatchEvent
     (watch [_ state stream]
-      (let [features     (features/get-team-enabled-features state)
+      (let [features     features
             render-wasm? (contains? features "render-wasm/v1")
             stopper-s    (rx/filter (ptk/type? ::finalize-workspace) stream)]
 
@@ -319,7 +323,9 @@
                                       :features features
                                       :thumbnails thumbnails})))))
                    (rx/map bundle-fetched)))
-             (rx/take-until stopper-s))))))
+             (rx/take-until stopper-s)
+             )) 
+             )))
 
 (defn initialize-workspace
   [file-id]
@@ -337,13 +343,14 @@
     (watch [_ state stream]
       (log/debug :hint "initialize-workspace" :file-id file-id)
       (let [stoper-s (rx/filter (ptk/type? ::finalize-workspace) stream)
+            features (features/get-team-enabled-features state)
             rparams  (rt/get-params state)]
 
         (->> (rx/merge
               (rx/of (ntf/hide)
                      (dcmt/retrieve-comment-threads file-id)
                      (dcmt/fetch-profiles)
-                     (fetch-bundle file-id))
+                     (fetch-bundle file-id features))
 
               (->> stream
                    (rx/filter (ptk/type? ::bundle-fetched))
@@ -397,6 +404,7 @@
   (ptk/reify ::finalize-workspace
     ptk/UpdateEvent
     (update [_ state]
+      (log/debug :hint "finalize-workspace" :file-id file-id)
       (-> state
           ;; FIXME: revisit
           (dissoc

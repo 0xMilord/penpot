@@ -33,7 +33,7 @@
     ptk/WatchEvent
     (watch [_ _ stream]
       (->> stream
-           (rx/filter (ptk/type? ::features/initialize))
+           (rx/filter (ptk/type? ::features/initialize-features))
            (rx/observe-on :async)
            (rx/filter #(features/active-feature? @st/state "plugins/runtime"))
            (rx/take 1)

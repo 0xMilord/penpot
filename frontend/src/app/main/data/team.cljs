@@ -105,7 +105,7 @@
 
     ptk/WatchEvent
     (watch [_ _ _]
-      (rx/of (features/initialize (or features #{}))))
+      (rx/of (features/initialize-features (or features #{}))))
 
     ptk/EffectEvent
     (effect [_ _ _]

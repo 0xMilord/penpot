@@ -296,7 +296,7 @@
 
 (defn ^:export init
   []
-  (st/emit! (features/initialize))
+  (st/emit! (features/initialize-features))
   (init-ui))
 
 (defn reinit

@@ -92,13 +92,13 @@
           (log/trc :hint "feature enabled" :feature feature)
           (update state :features-runtime (fnil conj #{}) feature))))))
 
-(defn initialize
-  ([] (initialize #{}))
+(defn initialize-features
+  ([] (initialize-features #{}))
   ([team-features]
    (assert (set? team-features) "expected a set of features")
    (assert (every? string? team-features) "expected a set of strings")
 
-   (ptk/reify ::initialize
+   (ptk/reify ::initialize-features
      ptk/UpdateEvent
      (update [_ state]
        (let [runtime-features (get state :features/runtime #{})
@@ -129,7 +129,6 @@
            (wasm/initialize true)
            (wasm/initialize false))
 
-         (log/inf :hint "initialized"
+         (log/inf :hint "initialize-features"
                   :enabled (str/join "," features)
                   :runtime (str/join "," (:features-runtime state))))))))
-

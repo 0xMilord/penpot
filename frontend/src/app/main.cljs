@@ -67,7 +67,7 @@
     (watch [_ _ stream]
       (rx/merge
        (rx/of (ev/initialize)
-              (feat/initialize)
+              (feat/initialize-features)
               (dp/refresh-profile))
 
        ;; Watch for profile deletion events

@@ -163,7 +163,7 @@
              (rx/mapcat
               (fn [{:keys [fonts team] :as bundle}]
                 (rx/of (df/fonts-fetched fonts)
-                       (features/initialize (:features team))
+                       (features/initialize-features (:features team))
                        (bundle-fetched (merge bundle params))))))))))
 
 (declare go-to-frame)
