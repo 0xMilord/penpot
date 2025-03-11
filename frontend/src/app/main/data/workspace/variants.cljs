@@ -11,10 +11,12 @@
    [app.common.data.macros :as dm]
    [app.common.files.changes-builder :as pcb]
    [app.common.files.helpers :as cfh]
+   [app.common.files.variant :as cfv]
    [app.common.logic.libraries :as cll]
    [app.common.logic.variants :as clv]
    [app.common.types.component :as ctc]
    [app.common.types.components-list :as ctkl]
+   [app.common.types.variant :as ctv]
    [app.common.uuid :as uuid]
    [app.main.data.changes :as dch]
    [app.main.data.helpers :as dsh]
@@ -28,8 +30,6 @@
    [app.util.dom :as dom]
    [beicon.v2.core :as rx]
    [potok.v2.core :as ptk]))
-
-(dm/export clv/find-related-components)
 
 (defn is-secondary-variant?
   [component data]
@@ -177,8 +177,8 @@
             new-component-id    (uuid/next)
             new-shape-id        (uuid/next)
 
-            value               (str clv/value-prefix
-                                     (-> (clv/extract-properties-values data objects (:variant-id component))
+            value               (str ctv/value-prefix
+                                     (-> (cfv/extract-properties-values data objects (:variant-id component))
                                          last
                                          :values
                                          count

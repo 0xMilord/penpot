@@ -16,6 +16,7 @@
    [app.common.types.shape.interactions :as ctsi]
    [app.common.types.shape.layout :as ctl]
    [app.common.types.token :as cto]
+   [app.common.types.variant :as ctv]
    [app.common.uuid :as uuid]
    [cuerdas.core :as str]))
 
@@ -424,11 +425,11 @@
                           ;; we need to get the updated library data to have access to the current properties
                           data                (pcb/get-library-data changes)
 
-                          props               (clv/path-to-properties
+                          props               (ctv/path-to-properties
                                                base-name
                                                (get-in data [:components first-comp-id :variant-properties]))
 
-                          variant-name        (clv/properties-to-name props)
+                          variant-name        (ctv/properties-to-name props)
                           [cpath cname]       (cfh/parse-path-name (:name parent))]
 
                       (-> (pcb/update-component changes

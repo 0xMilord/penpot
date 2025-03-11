@@ -8,7 +8,7 @@
   (:require-macros [app.main.style :as stl])
   (:require
    [app.common.data.macros :as dm]
-   [app.common.logic.variants :as clv]
+   [app.common.files.variant :as cfv]
    [app.main.ui.components.copy-button :refer [copy-button]]
    [app.main.ui.components.title-bar :refer [inspect-title-bar]]
    [app.util.i18n :refer [tr]]
@@ -30,7 +30,7 @@
   (let [data            (dm/get-in libraries [fid :data])
         variant-id      (->> shapes first :id)
         properties      (mf/with-memo [data objects variant-id]
-                          (clv/extract-properties-values data objects variant-id))]
+                          (cfv/extract-properties-values data objects variant-id))]
     [:div {:class (stl/css :attributes-block)}
      [:& inspect-title-bar
       {:title (tr "inspect.attributes.variant")
