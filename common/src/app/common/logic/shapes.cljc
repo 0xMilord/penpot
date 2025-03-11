@@ -10,7 +10,6 @@
    [app.common.files.changes-builder :as pcb]
    [app.common.files.helpers :as cfh]
    [app.common.geom.shapes :as gsh]
-   [app.common.logic.variants :as clv]
    [app.common.types.component :as ctk]
    [app.common.types.container :as ctn]
    [app.common.types.shape.interactions :as ctsi]
@@ -19,6 +18,9 @@
    [app.common.types.variant :as ctv]
    [app.common.uuid :as uuid]
    [cuerdas.core :as str]))
+
+;; Define in `app.common.logic.variants` we do this way to prevent circular dependency
+(def generate-add-new-property nil)
 
 (defn- generate-unapply-tokens
   "When updating attributes that have a token applied, we must unapply it, because the value
@@ -414,7 +416,7 @@
                                         (- max-path-items num-props))
 
                    changes            (nth
-                                       (iterate #(clv/generate-add-new-property % (:id parent)) changes)
+                                       (iterate #(generate-add-new-property % (:id parent)) changes)
                                        num-new-props)]
                (reduce
                 (fn [changes shape]

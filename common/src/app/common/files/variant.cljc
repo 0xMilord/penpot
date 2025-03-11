@@ -31,3 +31,19 @@
                             (map #(if (str/empty? (:value %)) "--" (:value %)))
                             distinct
                             dashes-to-end)}))))
+
+(defn get-variant-mains
+  [component data]
+  (when-let [variant-id (:variant-id component)]
+    (let [page-id (:main-instance-page component)
+          objects (-> (dm/get-in data [:pages-index page-id])
+                      (get :objects))]
+      (dm/get-in objects [variant-id :shapes]))))
+
+
+(defn is-secondary-variant?
+  [component data]
+  (let [shapes  (get-variant-mains component data)]
+    (and (seq shapes)
+         (not= (:main-instance-id component) (last shapes)))))
+
