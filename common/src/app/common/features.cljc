@@ -46,6 +46,7 @@
   #{"fdata/objects-map"
     "fdata/pointer-map"
     "fdata/shape-data-type"
+    "fdata/path-data"
     "components/v2"
     "styles/v2"
     "layout/grid"
@@ -111,6 +112,7 @@
     :feature-text-editor-v2 "text-editor/v2"
     :feature-render-wasm "render-wasm/v1"
     :feature-variants "variants/v1"
+    :feature-fdata-path-data "fdata/path-data"
     nil))
 
 (defn migrate-legacy-features
