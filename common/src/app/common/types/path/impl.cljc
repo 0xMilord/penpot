@@ -30,39 +30,66 @@
 (defprotocol ITransformable
   (-transform [_ m] "apply a transform"))
 
-#?(:clj
-   (defn transform!
-     [buffer offset m]
-     (let [a (dm/get-prop m :a)
-           b (dm/get-prop m :b)
-           c (dm/get-prop m :c)
-           d (dm/get-prop m :d)
-           e (dm/get-prop m :e)
-           f (dm/get-prop m :f)
-           t (.getShort ^ByteBuffer buffer offset)]
-       (case t
-         (1 2)
-         (let [x (.getFloat ^ByteBuffer buffer (+ offset 20))
-               y (.getFloat ^ByteBuffer buffer (+ offset 24))]
-           (.putFloat ^ByteBuffer buffer (+ offset 20) (+ (* x a) (* y c) e))
-           (.putFloat ^ByteBuffer buffer (+ offset 24) (+ (* x b) (* y d) f)))
+(defn- transform!
+  "Apply a transformation to a segment located under specified offset"
+  [buffer offset m]
+  (let [a (dm/get-prop m :a)
+        b (dm/get-prop m :b)
+        c (dm/get-prop m :c)
+        d (dm/get-prop m :d)
+        e (dm/get-prop m :e)
+        f (dm/get-prop m :f)
+        t #?(:clj  (.getShort ^ByteBuffer buffer offset)
+             :cljs (.getInt16 buffer offset))]
 
-         (3)
-         (let [c1x (.getFloat ^ByteBuffer buffer (+ offset 4))
-               c1y (.getFloat ^ByteBuffer buffer (+ offset 8))
-               c2x (.getFloat ^ByteBuffer buffer (+ offset 12))
-               c2y (.getFloat ^ByteBuffer buffer (+ offset 16))
-               x   (.getFloat ^ByteBuffer buffer (+ offset 20))
-               y   (.getFloat ^ByteBuffer buffer (+ offset 24))]
-           (.putFloat ^ByteBuffer buffer (+ offset 4) (+ (* c1x a) (* c1y c) e))
-           (.putFloat ^ByteBuffer buffer (+ offset 8) (+ (* c1x b) (* c1y d) f))
-           (.putFloat ^ByteBuffer buffer (+ offset 12) (+ (* c2x a) (* c2y c) e))
-           (.putFloat ^ByteBuffer buffer (+ offset 16) (+ (* c2x b) (* c2y d) f))
-           (.putFloat ^ByteBuffer buffer (+ offset 20) (+ (* x a) (* y c) e))
-           (.putFloat ^ByteBuffer buffer (+ offset 24) (+ (* x b) (* y d) f)))
+    (case t
+      (1 2)
+      (let [x #?(:clj  (.getFloat ^ByteBuffer buffer (+ offset 20))
+                 :cljs (.getFloat32 buffer (+ offset 20)))
+            y #?(:clj  (.getFloat ^ByteBuffer buffer (+ offset 24))
+                 :cljs (.getFloat32 buffer (+ offset 24)))
+            x (+ (* x a) (* y c) e)
+            y (+ (* x b) (* y d) f)]
+        #?(:clj  (.putFloat ^ByteBuffer buffer (+ offset 20) x)
+           :cljs (.setFloat32 buffer (+ offset 20) x))
+        #?(:clj  (.putFloat ^ByteBuffer buffer (+ offset 24) y)
+           :cljs (.setFloat32 buffer (+ offset 24) y)))
 
-         4
-         nil))))
+      3
+      (let [c1x #?(:clj  (.getFloat ^ByteBuffer buffer (+ offset 4))
+                   :cljs (.getFloat32 buffer (+ offset 4)))
+            c1y #?(:clj  (.getFloat ^ByteBuffer buffer (+ offset 8))
+                   :cljs (.getFloat32 buffer (+ offset 8)))
+            c2x #?(:clj  (.getFloat ^ByteBuffer buffer (+ offset 12))
+                   :cljs (.getFloat32 buffer (+ offset 12)))
+            c2y #?(:clj  (.getFloat ^ByteBuffer buffer (+ offset 16))
+                   :cljs (.getFloat32 buffer (+ offset 16)))
+            x   #?(:clj  (.getFloat ^ByteBuffer buffer (+ offset 20))
+                   :cljs (.getFloat32 buffer (+ offset 20)))
+            y   #?(:clj  (.getFloat ^ByteBuffer buffer (+ offset 24))
+                   :cljs (.getFloat32 buffer (+ offset 24)))
+
+            c1x (+ (* c1x a) (* c1y c) e)
+            c1y (+ (* c1x b) (* c1y d) f)
+            c2x (+ (* c2x a) (* c2y c) e)
+            c2y (+ (* c2x b) (* c2y d) f)
+            x   (+ (* x a) (* y c) e)
+            y   (+ (* x b) (* y d) f)]
+
+        #?(:clj  (.putFloat ^ByteBuffer buffer (+ offset 4) c1x)
+           :cljs (.setFloat32 buffer (+ offset 4) c1x))
+        #?(:clj  (.putFloat ^ByteBuffer buffer (+ offset 8) c1y)
+           :cljs (.setFloat32 buffer (+ offset 8) c1y))
+        #?(:clj  (.putFloat ^ByteBuffer buffer (+ offset 12) c2x)
+           :cljs (.setFloat32 buffer (+ offset 12) c2x))
+        #?(:clj  (.putFloat ^ByteBuffer buffer (+ offset 16) c2y)
+           :cljs (.setFloat32 buffer (+ offset 16) c2y))
+        #?(:clj  (.putFloat ^ByteBuffer buffer (+ offset 20) x)
+           :cljs (.setFloat32 buffer (+ offset 20) x))
+        #?(:clj  (.putFloat ^ByteBuffer buffer (+ offset 24) y)
+           :cljs (.setFloat32 buffer (+ offset 24) y)))
+
+      nil)))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;; TYPE: PATH-DATA
@@ -178,14 +205,21 @@
   [size i]
   (and (< i size) (>= i 0)))
 
-#?(:clj
-   (defn- clone-buffer
-     [buffer]
+(defn- clone-buffer
+  [buffer]
+
+  #?(:clj
      (let [src (.array ^ByteBuffer buffer)
            len (alength ^bytes src)
            dst (byte-array len)]
        (System/arraycopy src 0 dst 0 len)
-       (ByteBuffer/wrap dst))))
+       (ByteBuffer/wrap dst))
+     :cljs
+     (let [src-view (js/Uint32Array. buffer)
+           dst-buff (js/ArrayBuffer. (.-byteLength buffer))
+           dst-view (js/Uint32Array. dst-buff)]
+       (.set dst-view src-view)
+       dst-buff)))
 
 #?(:clj
    (deftype PathData [size buffer ^:unsynchronized-mutable hash]
@@ -273,6 +307,18 @@
 
      (-bytes [_]
        (js/Uint8Array. buffer))
+
+     ITransformable
+     (-transform [this m]
+       (let [buffer (clone-buffer buffer)
+             dview  (js/DataView. buffer)]
+         (loop [index 0]
+
+           (when (< index size)
+             (let [offset (* index SEGMENT-BYTE-SIZE)]
+               (transform! dview offset m)
+               (recur (inc index)))))
+         (PathData. size buffer dview nil)))
 
      cljs.core/ISequential
      cljs.core/IEquiv
