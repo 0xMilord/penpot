@@ -341,10 +341,10 @@
   [content]
   (let [pdata  (path/path-data content)
         size   (* (count pdata) path/SEGMENT-BYTE-SIZE)
-        offset (h/call internal-module "_alloc_bytes" size)
-        heap   (gobj/get ^js internal-module "HEAPU8")]
+        offset (h/call wasm/internal-module "_alloc_bytes" size)
+        heap   (gobj/get ^js wasm/internal-module "HEAPU8")]
     (path/write-to pdata (.-buffer heap) offset)
-    (h/call internal-module "_set_shape_path_content")))
+    (h/call wasm/internal-module "_set_shape_path_content")))
 
 (defn set-shape-svg-raw-content
   [content]
@@ -362,8 +362,6 @@
 (defn set-shape-opacity
   [opacity]
   (h/call wasm/internal-module "_set_shape_opacity" (or opacity 1)))
-
-
 
 (defn set-constraints-h
   [constraint]

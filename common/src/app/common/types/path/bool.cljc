@@ -13,8 +13,6 @@
    [app.common.types.path.segment :as segm]
    [app.common.types.path.subpath :as subpath]))
 
-;; FIXME: revisit public private
-
 (defn add-previous
   ([content]
    (add-previous content nil))
