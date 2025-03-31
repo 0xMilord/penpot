@@ -448,13 +448,13 @@
   [shape children objects]
 
   (let [content
-        (path/calc-bool-content shape objects)
+        (path/calc-bool-content* shape objects)
 
         shape
-        (assoc shape :content content)
+        (assoc shape :content (path/content content))
 
         [points selrect]
-        (path/content->points+selrect shape content)]
+        (path/get-geometry shape content)]
 
     (if (and (some? selrect) (d/not-empty? points))
       (-> shape

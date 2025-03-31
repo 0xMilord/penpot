@@ -25,10 +25,10 @@
   (let [shape-id (:id shape)
 
         [old-points old-selrect]
-        (path/content->points+selrect shape old-content)
+        (path/get-geometry shape old-content)
 
         [new-points new-selrect]
-        (path/content->points+selrect shape new-content)
+        (path/get-geometry shape new-content)
 
         ;; We set the old values so the update-shapes works
         objects
@@ -42,9 +42,7 @@
             (pcb/with-objects objects))
 
         new-content
-        (if (contains? features "fdata/path-data")
-          (path/path-data new-content)
-          new-content)]
+        (path/content new-content)]
 
     (cond
       ;; https://tree.taiga.io/project/penpot/issue/2366

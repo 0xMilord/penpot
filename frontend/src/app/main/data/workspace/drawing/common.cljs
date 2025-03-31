@@ -12,6 +12,7 @@
    [app.common.math :as mth]
    [app.common.types.modifiers :as ctm]
    [app.common.types.shape :as cts]
+   [app.common.types.path :as path]
    [app.main.data.helpers :as dsh]
    [app.main.data.workspace.shapes :as dwsh]
    [app.main.data.workspace.undo :as dwu]
@@ -64,6 +65,10 @@
                    (and click-draw? text?)
                    (-> (assoc :height 17 :width 4 :grow-type :auto-width)
                        (cts/setup-shape))
+
+                   (or (cfh/path-shape? shape)
+                       (cfh/bool-shape? shape))
+                   (update :content path/content)
 
                    :always
                    (dissoc :initialized? :click-draw?))]

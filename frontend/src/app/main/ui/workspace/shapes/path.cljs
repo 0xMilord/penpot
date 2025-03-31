@@ -17,8 +17,8 @@
 (defn apply-content-modifiers
   [shape content-modifiers]
   (let [shape (update shape :content types.path/apply-content-modifiers content-modifiers)
-        [_ new-selrect] (types.path/content->points+selrect shape (:content shape))]
-    (assoc shape :selrect new-selrect)))
+        [_ selrect] (types.path/get-geometry shape)]
+    (assoc shape :selrect selrect)))
 
 (mf/defc path-wrapper
   {::mf/wrap-props false}

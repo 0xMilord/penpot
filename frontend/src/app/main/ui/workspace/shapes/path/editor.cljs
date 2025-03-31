@@ -227,13 +227,7 @@
          :as edit-path} (mf/deref edit-path-ref)
 
         selected-points (or selected-points #{})
-
-        shape (cond-> shape
-                (cfh/path-shape? shape)
-                (path/convert-to-path)
-
-                :always
-                hooks/use-equal-memo)
+        shape (hooks/use-equal-memo shape)
 
         base-content (:content shape)
         base-points (mf/use-memo (mf/deps base-content) #(->> base-content path.segment/content->points))

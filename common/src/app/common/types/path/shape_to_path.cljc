@@ -136,6 +136,9 @@
 
 (declare convert-to-path)
 
+;; FIXME: this looks unnecesary because penpot already normalizes all
+;; path content to be absolute. There are no relative segments on
+;; penpot.
 (defn- fix-first-relative
   "Fix an issue with the simplify commands not changing the first relative"
   [content]
@@ -154,7 +157,9 @@
         head-data (select-keys head bool/style-properties)
         content (into []
                       (comp (filter cfh/path-shape?)
-                            (mapcat #(fix-first-relative (:content %))))
+                            (map :content)
+                            (map vec)
+                            (mapcat fix-first-relative))
                       child-as-paths)]
     (-> group
         (assoc :type :path)

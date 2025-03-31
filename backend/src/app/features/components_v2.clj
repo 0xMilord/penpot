@@ -579,7 +579,7 @@
                       (let [shape (update shape :content fix-path-content)]
                         (if (not (valid-path-content? (:content shape)))
                           shape
-                          (let [[points selrect] (path/content->points+selrect shape (:content shape))]
+                          (let [[points selrect] (path/get-geometry shape)]
                             (-> shape
                                 (dissoc :bool-content)
                                 (dissoc :bool-type)

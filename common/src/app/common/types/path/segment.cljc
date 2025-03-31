@@ -821,6 +821,7 @@
     (->> content
          (into [] (map update-command)))))
 
+;; FIXME: add optimizations
 (defn content->selrect
   [content]
   (let [extremities

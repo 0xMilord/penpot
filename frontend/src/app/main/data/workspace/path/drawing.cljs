@@ -111,7 +111,7 @@
             (update-in [:workspace-local :edit-path id] dissoc :drag-handler)
             (update-in [:workspace-local :edit-path id] dissoc :content-modifiers)
             (assoc-in  [:workspace-local :edit-path id :prev-handler] handler)
-            (update-in (st/get-path-location state) helpers/update-selrect))))
+            (update-in (st/get-path-location state) helpers/update-geometry))))
 
     ptk/WatchEvent
     (watch [_ state _]

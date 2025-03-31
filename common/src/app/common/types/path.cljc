@@ -43,7 +43,7 @@
     (nil? data)
     (impl/from-plain [])
 
-    (vector? data)
+    (sequential? data)
     (impl/from-plain data)
 
     :else
@@ -65,7 +65,7 @@
 ;; TRANSFORMATIONS
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
-;; MOVE TO segment
+;; FIXME: MOVE TO segment
 (defn apply-content-modifiers
   "Apply to content a map with point translations"
   [content modifiers]
@@ -100,13 +100,13 @@
 ;; HELPERS
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
-;; FIXME: rename?
-(defn calc-bool-content
+(defn calc-bool-content*
+  "Calculate the boolean content from shape and objects. Returns plain
+  vector of segments"
   [shape objects]
-
   (let [extract-content-xf
         (comp (map (d/getf objects))
-              (filter (comp not :hidden))
+              (remove :hidden)
               (remove cpf/svg-raw-shape?)
               (map #(stp/convert-to-path % objects))
               (map :content))
@@ -115,6 +115,13 @@
         (sequence extract-content-xf (:shapes shape))]
 
     (bool/content (:bool-type shape) contents)))
+
+(defn calc-bool-content
+  "Calculate the boolean content from shape and objects. Returns a
+  packed PathData instance"
+  [shape objects]
+  (-> (calc-bool-content* shape objects)
+      (impl/from-plain)))
 
 (defn shape-with-open-path?
   [shape]
@@ -128,61 +135,73 @@
                    (subpath/get-subpaths)
                    (every? subpath/is-closed?))))))
 
-;; FIXME: ensure type
 (defn transform-content
   [content transform]
-  (segment/transform-content content transform))
+  (-> content
+      (segment/transform-content transform)
+      (impl/from-plain)))
 
-;; FIXME: ensure type
 (defn move-content
   [content move-vec]
-  (segment/move-content content move-vec))
+  (-> content
+      (segment/move-content move-vec)
+      (impl/from-plain)))
 
-(defn content->selrect
-  [content]
-  (segment/content->selrect content))
+(defn get-geometry
+  "Given a path shape, calculate its points and selrect"
+  ([shape] (get-geometry shape (get shape :content)))
+  ([shape content]
+   (let [flip-x
+         (get shape :flip-x)
 
-(defn content->points+selrect
-  "Given the content of a shape, calculate its points and selrect"
-  [shape content]
-  (let [{:keys [flip-x flip-y]} shape
-        transform
-        (cond-> (:transform shape (gmt/matrix))
-          flip-x (gmt/scale (gpt/point -1 1))
-          flip-y (gmt/scale (gpt/point 1 -1)))
+         flip-y
+         (get shape :flip-y)
 
-        transform-inverse
-        (cond-> (gmt/matrix)
-          flip-x (gmt/scale (gpt/point -1 1))
-          flip-y (gmt/scale (gpt/point 1 -1))
-          :always (gmt/multiply (:transform-inverse shape (gmt/matrix))))
+         ;; Ensure plain format once
+         content
+         (vec content)
 
-        center (or (some-> (dm/get-prop shape :selrect) grc/rect->center)
-                   (segment/content-center content))
+         transform
+         (cond-> (:transform shape (gmt/matrix))
+           flip-x (gmt/scale (gpt/point -1 1))
+           flip-y (gmt/scale (gpt/point 1 -1)))
 
-        base-content (transform-content
-                      content
-                      (gmt/transform-in center transform-inverse))
+         transform-inverse
+         (cond-> (gmt/matrix)
+           flip-x (gmt/scale (gpt/point -1 1))
+           flip-y (gmt/scale (gpt/point 1 -1))
+           :always (gmt/multiply (:transform-inverse shape (gmt/matrix))))
 
-        ;; Calculates the new selrect with points given the old center
-        points (-> (content->selrect base-content)
-                   (grc/rect->points)
-                   (gco/transform-points center transform))
+         center
+         (or (some-> (dm/get-prop shape :selrect) grc/rect->center)
+             (segment/content-center content))
 
-        points-center (gco/points->center points)
+         base-content
+         (segment/transform-content content (gmt/transform-in center transform-inverse))
 
-        ;; Points is now the selrect but the center is different so we can create the selrect
-        ;; through points
-        selrect (-> points
-                    (gco/transform-points points-center transform-inverse)
-                    (grc/points->rect))]
+         ;; Calculates the new selrect with points given the old center
+         points
+         (-> (segment/content->selrect base-content)
+             (grc/rect->points)
+             (gco/transform-points center transform))
 
-    [points selrect]))
+         points-center
+         (gco/points->center points)
+
+         ;; Points is now the selrect but the center is different so we can create the selrect
+         ;; through points
+         selrect
+         (-> points
+             (gco/transform-points points-center transform-inverse)
+             (grc/points->rect))]
+
+     [points selrect])))
 
 (defn convert-to-path
   "Transform a shape to a path shape"
   ([shape]
-   (stp/convert-to-path shape {}))
+   (convert-to-path shape {}))
   ([shape objects]
-   (stp/convert-to-path shape objects)))
+   (-> (stp/convert-to-path shape objects)
+       (update :content content))))
 

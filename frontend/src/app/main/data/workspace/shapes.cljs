@@ -122,16 +122,6 @@
        (let [page-id  (:current-page-id state)
              objects  (dsh/lookup-page-objects state page-id)
 
-             features
-             (features/get-team-enabled-features state)
-
-             shape
-             (if (and (contains? features "fdata/path-data")
-                      (or (cfh/path-shape? shape)
-                          (cfh/bool-shape? shape)))
-               (update shape :content path/path-data)
-               shape)
-
              [shape changes]
              (-> (pcb/empty-changes it page-id)
                  (pcb/with-objects objects)

@@ -614,10 +614,9 @@
                     (gsh/transform-shape modifiers)
                     (cond-> (d/not-empty? pos-data)
                       (assoc-position-data pos-data shape))
-                    (cond-> (and (contains? features "fdata/path-data")
-                                 (or (cfh/path-shape? shape)
-                                     (cfh/bool-shape? shape)))
-                      (update :content path/path-data))
+                    (cond-> (or (cfh/path-shape? shape)
+                                (cfh/bool-shape? shape))
+                      (update :content path/content))
                     (cond-> text-shape?
                       (update-grow-type shape)))))]
 
