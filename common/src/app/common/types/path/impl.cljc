@@ -10,6 +10,7 @@
   (:require
    #?(:clj [app.common.fressian :as fres])
    #?(:clj [clojure.data.json :as json])
+   [app.common.data.macros :as dm]
    [app.common.schema :as sm]
    [app.common.schema.generators :as sg]
    [app.common.svg.path :as svg.path]
@@ -20,6 +21,48 @@
       :clj  [java.nio ByteBuffer])))
 
 #?(:clj (set! *warn-on-reflection* true))
+
+
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;; TYPE: SEGMENT-POINTER
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+
+(defprotocol ITransformable
+  (-transform [_ m] "apply a transform"))
+
+#?(:clj
+   (defn transform!
+     [buffer offset m]
+     (let [a (dm/get-prop m :a)
+           b (dm/get-prop m :b)
+           c (dm/get-prop m :c)
+           d (dm/get-prop m :d)
+           e (dm/get-prop m :e)
+           f (dm/get-prop m :f)
+           t (.getShort ^ByteBuffer buffer offset)]
+       (case t
+         (1 2)
+         (let [x (.getFloat ^ByteBuffer buffer (+ offset 20))
+               y (.getFloat ^ByteBuffer buffer (+ offset 24))]
+           (.putFloat ^ByteBuffer buffer (+ offset 20) (+ (* x a) (* y c) e))
+           (.putFloat ^ByteBuffer buffer (+ offset 24) (+ (* x b) (* y d) f)))
+
+         (3)
+         (let [c1x (.getFloat ^ByteBuffer buffer (+ offset 4))
+               c1y (.getFloat ^ByteBuffer buffer (+ offset 8))
+               c2x (.getFloat ^ByteBuffer buffer (+ offset 12))
+               c2y (.getFloat ^ByteBuffer buffer (+ offset 16))
+               x   (.getFloat ^ByteBuffer buffer (+ offset 20))
+               y   (.getFloat ^ByteBuffer buffer (+ offset 24))]
+           (.putFloat ^ByteBuffer buffer (+ offset 4) (+ (* c1x a) (* c1y c) e))
+           (.putFloat ^ByteBuffer buffer (+ offset 8) (+ (* c1x b) (* c1y d) f))
+           (.putFloat ^ByteBuffer buffer (+ offset 12) (+ (* c2x a) (* c2y c) e))
+           (.putFloat ^ByteBuffer buffer (+ offset 16) (+ (* c2x b) (* c2y d) f))
+           (.putFloat ^ByteBuffer buffer (+ offset 20) (+ (* x a) (* y c) e))
+           (.putFloat ^ByteBuffer buffer (+ offset 24) (+ (* x b) (* y d) f)))
+
+         4
+         nil))))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;; TYPE: PATH-DATA
@@ -136,6 +179,15 @@
   (and (< i size) (>= i 0)))
 
 #?(:clj
+   (defn- clone-buffer
+     [buffer]
+     (let [src (.array ^ByteBuffer buffer)
+           len (alength ^bytes src)
+           dst (byte-array len)]
+       (System/arraycopy src 0 dst 0 len)
+       (ByteBuffer/wrap dst))))
+
+#?(:clj
    (deftype PathData [size buffer ^:unsynchronized-mutable hash]
      Object
      (toString [_]
@@ -145,6 +197,16 @@
        (if (instance? PathData other)
          (.equals ^ByteBuffer buffer (.-buffer ^PathData other))
          false))
+
+     ITransformable
+     (-transform [this m]
+       (let [buffer (clone-buffer buffer)]
+         (loop [index 0]
+           (when (< index size)
+             (let [offset (* index SEGMENT-BYTE-SIZE)]
+               (transform! buffer offset m)
+               (recur (inc index)))))
+         (PathData. size buffer nil)))
 
      json/JSONWriter
      (-write [this writter options]
