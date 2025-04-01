@@ -76,7 +76,11 @@
               position-data)
         position-data))))
 
-;; FIXME: revist usage of mutability
+;; FIXME: review performance of this; this function is executing too
+;; many times, including when the point vector is 0,0. This function
+;; can be implemented in function of transform which is already mor
+;; performant
+
 (defn move
   "Move the shape relatively to its current
   position applying the provided delta."

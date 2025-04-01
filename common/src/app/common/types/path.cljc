@@ -137,15 +137,13 @@
 
 (defn transform-content
   [content transform]
-  (-> content
-      (segment/transform-content transform)
-      (impl/from-plain)))
+  (segment/transform-content content transform))
 
 (defn move-content
   [content move-vec]
-  (-> content
-      (segment/move-content move-vec)
-      (impl/from-plain)))
+  (if (gpt/zero? move-vec)
+    content
+    (segment/move-content content move-vec)))
 
 (defn get-geometry
   "Given a path shape, calculate its points and selrect"

@@ -9,6 +9,7 @@
   (:require
    [app.common.data :as d]
    [app.common.geom.point :as gpt]
+   [app.common.geom.matrix :as gmt]
    [app.common.geom.rect :as grc]
    [app.common.math :as mth]
    [app.common.types.path.helpers :as helpers]
@@ -770,56 +771,42 @@
         (separate-nodes points)
         (replace-points point->merge-point))))
 
+(defn- transform-plain-content
+  [content transform]
+  (let [set-tr
+        (fn [params px py]
+          (let [tr-point (-> (gpt/point (get params px) (get params py))
+                             (gpt/transform transform))]
+            (assoc params
+                   px (:x tr-point)
+                   py (:y tr-point))))
+
+        transform-params
+        (fn [{:keys [x c1x c2x] :as params}]
+          (cond-> params
+            (some? x)   (set-tr :x :y)
+            (some? c1x) (set-tr :c1x :c1y)
+            (some? c2x) (set-tr :c2x :c2y)))]
+
+    (into []
+          (map #(update % :params transform-params))
+          content)))
+
+
 (defn transform-content
   [content transform]
   (if (some? transform)
-    (let [set-tr
-          (fn [params px py]
-            (let [tr-point (-> (gpt/point (get params px) (get params py))
-                               (gpt/transform transform))]
-              (assoc params
-                     px (:x tr-point)
-                     py (:y tr-point))))
-
-          transform-params
-          (fn [{:keys [x c1x c2x] :as params}]
-            (cond-> params
-              (some? x)   (set-tr :x :y)
-              (some? c1x) (set-tr :c1x :c1y)
-              (some? c2x) (set-tr :c2x :c2y)))]
-
-      (into []
-            (map #(update % :params transform-params))
-            content))
+    (if (impl/path-data? content)
+      (impl/-transform content transform)
+      ;; FIXME: revisit if this fallback is necessary
+      (-> (transform-plain-content content transform)
+          (impl/from-plain)))
     content))
 
 (defn move-content
   [content move-vec]
-  (let [dx (:x move-vec)
-        dy (:y move-vec)
-
-        set-tr
-        (fn [params px py]
-          (cond-> params
-            (d/num? dx)
-            (update px + dx)
-
-            (d/num? dy)
-            (update py + dy)))
-
-        transform-params
-        (fn [{:keys [x y c1x c1y c2x c2y] :as params}]
-          (cond-> params
-            (d/num? x y)   (set-tr :x :y)
-            (d/num? c1x c1y) (set-tr :c1x :c1y)
-            (d/num? c2x c2y) (set-tr :c2x :c2y)))
-
-        update-command
-        (fn [command]
-          (update command :params transform-params))]
-
-    (->> content
-         (into [] (map update-command)))))
+  (let [transform (gmt/translate-matrix move-vec)]
+    (transform-content content transform)))
 
 ;; FIXME: add optimizations
 (defn content->selrect
