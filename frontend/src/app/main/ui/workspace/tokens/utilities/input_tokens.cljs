@@ -4,7 +4,7 @@
 ;;
 ;; Copyright (c) KALEIDOS INC
 
-(ns app.main.ui.workspace.tokens.components.controls.input-tokens
+(ns app.main.ui.workspace.tokens.utilities.input-tokens
   (:require-macros [app.main.style :as stl])
   (:require
    [app.common.data :as d]

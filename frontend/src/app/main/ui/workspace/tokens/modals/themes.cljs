@@ -23,7 +23,7 @@
    [app.main.ui.ds.foundations.typography.heading :refer [heading*]]
    [app.main.ui.ds.foundations.typography.text :refer [text*]]
    [app.main.ui.icons :as i]
-   [app.main.ui.workspace.tokens.components.controls.input-tokens :refer [input-tokens*]]
+   [app.main.ui.workspace.tokens.utilities.input-tokens :refer [input-tokens*]]
    [app.main.ui.workspace.tokens.sets :as wts]
    [app.util.dom :as dom]
    [app.util.i18n :refer [tr]]
