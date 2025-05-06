@@ -6,7 +6,11 @@ use skia_safe::{
     self as skia,
     paint::Paint,
     textlayout::{FontCollection, ParagraphBuilder, ParagraphStyle},
+    Font, Path, TextBlob, Point
 };
+
+// Import get_path from text_utils
+use skia_safe::utils::text_utils::get_path;
 
 use crate::shapes::Shape;
 
@@ -48,6 +52,10 @@ impl TextContent {
 
     pub fn add_paragraph(&mut self, paragraph: Paragraph) {
         self.paragraphs.push(paragraph);
+    }
+
+    pub fn paragraphs(&self) -> &Vec<Paragraph> {
+        &self.paragraphs
     }
 
     pub fn to_paragraphs(&self, fonts: &FontCollection) -> Vec<Vec<skia::textlayout::Paragraph>> {
@@ -135,6 +143,22 @@ impl TextContent {
                     .collect()
             })
             .collect()
+    }
+
+    pub fn to_path(&self, font: &Font, selrect: &Rect) -> Vec<Path> {
+        let mut paths = Vec::new();
+        for paragraph in &self.paragraphs {
+            for leaf in &paragraph.children {
+                // Validate selrect coordinates
+                if selrect.width() <= 0.0 || selrect.height() <= 0.0 {
+                    panic!("Invalid selrect dimensions: {:?}", selrect);
+                }
+                let point = Point::new(selrect.x(), selrect.y());
+                let path = get_path(&leaf.text.as_str(), point, font);
+                paths.push(path);
+            }
+        }
+        paths
     }
 }
 
@@ -286,6 +310,14 @@ impl TextLeaf {
         ]);
 
         style
+    }
+
+    pub fn font_size(&self) -> f32 {
+        self.font_size
+    }
+
+    pub fn font_family(&self) -> &FontFamily {
+        &self.font_family
     }
 
     pub fn to_stroke_style(

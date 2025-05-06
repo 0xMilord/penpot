@@ -130,6 +130,68 @@ pub fn draw_stroke_on_path(
     );
 }
 
+pub fn draw_text_stroke_on_path(
+    canvas: &skia::Canvas,
+    stroke: &Stroke,
+    skia_path: &mut skia::Path,
+    selrect: &Rect,
+    path_transform: Option<&Matrix>,
+    svg_attrs: &HashMap<String, String>,
+    scale: f32,
+    shadow: Option<&ImageFilter>,
+    antialias: bool,
+) {
+    let is_open = false;
+    let mut paint: skia_safe::Handle<_> =
+        stroke.to_stroked_paint(is_open, selrect, svg_attrs, scale, antialias);
+
+    if let Some(filter) = shadow {
+        paint.set_image_filter(filter.clone());
+    }
+
+    // Draw the different kind of strokes for a path requires different strategies:
+    match stroke.render_kind(is_open) {
+        // For inner stroke we draw a center stroke (with double width) and clip to the original path (that way the extra outer stroke is removed)
+        StrokeKind::InnerStroke => {
+            canvas.save(); // As we are using clear for surfaces we use save and restore here to still be able to clean the full surface
+            canvas.clip_path(&skia_path, skia::ClipOp::Intersect, antialias);
+            canvas.draw_path(&skia_path, &paint);
+            canvas.restore();
+        }
+        // For center stroke we don't need to do anything extra
+        StrokeKind::CenterStroke => {
+            canvas.draw_path(&skia_path, &paint);
+        }
+        // For outer stroke we draw a center stroke (with double width) and use another path with blend mode clear to remove the inner stroke added
+        StrokeKind::OuterStroke => {
+            let mut outer_paint = skia::Paint::default();
+            outer_paint.set_blend_mode(skia::BlendMode::SrcOver);
+            outer_paint.set_anti_alias(antialias);
+            let layer_rec = skia::canvas::SaveLayerRec::default().paint(&outer_paint);
+            canvas.save_layer(&layer_rec);
+            canvas.draw_path(&skia_path, &paint);
+
+            let mut clear_paint = skia::Paint::default();
+            clear_paint.set_blend_mode(skia::BlendMode::Clear);
+            clear_paint.set_anti_alias(antialias);
+            canvas.draw_path(&skia_path, &clear_paint);
+
+            canvas.restore();
+        }
+    }
+
+    handle_stroke_caps(
+        skia_path,
+        stroke,
+        &selrect,
+        canvas,
+        is_open,
+        svg_attrs,
+        scale,
+        antialias,
+    );
+}
+
 fn handle_stroke_cap(
     canvas: &skia::Canvas,
     cap: StrokeCap,
@@ -487,9 +549,13 @@ pub fn render(
     antialias: bool,
 ) {
     let scale = render_state.get_scale();
-    let canvas = render_state
-        .surfaces
-        .canvas(surface_id.unwrap_or(SurfaceId::Strokes));
+    let fonts = &render_state.fonts;
+    let canvas = {
+        render_state
+            .surfaces
+            .canvas(surface_id.unwrap_or(SurfaceId::Strokes))
+    };    
+
     let selrect = shape.selrect;
     let path_transform = shape.to_path_transform();
     let svg_attrs = &shape.svg_attrs;
@@ -529,6 +595,30 @@ pub fn render(
                         shadow,
                         antialias,
                     );
+                }
+            }
+            Type::Text(text_content) => {
+                for paragraph in text_content.paragraphs() {
+                    for leaf in paragraph.get_children() {
+                        let family_alias = leaf.font_family().to_string();
+                        if let Some(font) = fonts.get_font_by_family(&family_alias, leaf.font_size()) {
+                            let paths = text_content.to_path(&font, &selrect);
+                            println!("@@@ Paths: {:?}", paths);
+                            for mut path in paths {
+                                draw_text_stroke_on_path(
+                                    canvas,
+                                    stroke,
+                                    &mut path,
+                                    &selrect,
+                                    path_transform.as_ref(),
+                                    svg_attrs,
+                                    scale,
+                                    shadow,
+                                    antialias,
+                                );
+                            }
+                        }
+                    }
                 }
             }
             _ => unreachable!("This shape should not have strokes"),

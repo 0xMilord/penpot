@@ -87,6 +87,14 @@ impl FontStore {
         let serialized = format!("{}", family);
         self.font_provider.family_names().any(|x| x == serialized)
     }
+
+    pub fn get_font_by_family(&self, family: &str, size: f32) -> Option<Font> {
+        if let Some(typeface) = self.font_provider.match_family_style(family, skia::FontStyle::default()) {
+            Some(Font::new(typeface, size))
+        } else {
+            None
+        }
+    }
 }
 
 fn load_default_provider(font_mgr: &FontMgr) -> skia::textlayout::TypefaceFontProvider {
