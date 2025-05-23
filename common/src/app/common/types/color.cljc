@@ -8,6 +8,7 @@
   (:require
    [app.common.data :as d]
    [app.common.data.macros :as dm]
+   [app.common.media :as cm]
    [app.common.schema :as sm]
    [app.common.schema.generators :as sg]
    [app.common.schema.openapi :as-alias oapi]
@@ -41,6 +42,7 @@
   [o]
   (and (string? o) (some? (re-matches rgb-color-re o))))
 
+;; FIXME: rename to hex-string
 (def schema:rgb-color
   (sm/register!
    {:type ::rgb-color
@@ -56,9 +58,9 @@
 
 (def schema:image
   [:map {:title "ImageColor"}
-   [:width ::sm/int]
-   [:height ::sm/int]
-   [:mtype ::sm/text]
+   [:width [::sm/int {:min 0 :gen/gen sg/int}]]
+   [:height [::sm/int {:min 0 :gen/gen sg/int}]]
+   [:mtype {:gen/gen (sg/elements cm/image-types)} ::sm/text]
    [:id ::sm/uuid]
    [:name {:optional true} ::sm/text]
    [:keep-aspect-ratio {:optional true} :boolean]])
@@ -68,7 +70,7 @@
 
 (def schema:gradient
   [:map {:title "Gradient"}
-   [:type [::sm/one-of #{:linear :radial}]]
+   [:type [::sm/one-of gradient-types]]
    [:start-x ::sm/safe-number]
    [:start-y ::sm/safe-number]
    [:end-x ::sm/safe-number]
@@ -78,28 +80,29 @@
     [:vector {:min 1 :gen/max 2}
      [:map {:title "GradientStop"}
       [:color schema:rgb-color]
-      [:opacity {:optional true} [:maybe ::sm/safe-number]]
+      [:opacity {:optional true} [::sm/number {:min 0 :max 1}]]
       [:offset ::sm/safe-number]]]]])
 
 (def schema:color-attrs
   [:map {:title "ColorAttrs"}
    [:id {:optional true} ::sm/uuid]
    [:name {:optional true} :string]
-   [:path {:optional true} [:maybe :string]]
-   [:value {:optional true} [:maybe :string]]
-   [:color {:optional true} [:maybe schema:rgb-color]]
-   [:opacity {:optional true} [:maybe ::sm/safe-number]]
+   [:path {:optional true} :string]
+   [:value {:optional true} :string]
+   [:color {:optional true} schema:rgb-color]
+   [:opacity {:optional true} [::sm/number {:min 0 :max 1}]]
    [:modified-at {:optional true} ::sm/inst]
    [:ref-id {:optional true} ::sm/uuid]
    [:ref-file {:optional true} ::sm/uuid]
-   [:gradient {:optional true} [:maybe schema:gradient]]
-   [:image {:optional true} [:maybe schema:image]]
+   [:gradient {:optional true} schema:gradient]
+   [:image {:optional true}  schema:image]
    [:plugin-data {:optional true} ::ctpg/plugin-data]])
 
 (def schema:color
   [:and schema:color-attrs
    [::sm/contains-any {:strict true} [:color :gradient :image]]])
 
+;; FIXME: remove maybe
 (def schema:recent-color
   [:and
    [:map {:title "RecentColor"}
