@@ -2235,7 +2235,11 @@
                                                            page
                                                            {:id (:id file)
                                                             :data file}
-                                                           libraries)))]
+                                                           libraries))
+                    (and (nil? (ctk/get-swap-ref new-shape))
+                         inside-comp?)
+                    (ctk/set-swap-ref (or (ctk/get-swap-ref shape)
+                                          (:shape-ref shape))))]
 
     [new-shape (-> changes
                    ;; Restore the properties
