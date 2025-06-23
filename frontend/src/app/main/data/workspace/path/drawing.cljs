@@ -312,7 +312,7 @@
 
     ptk/WatchEvent
     (watch [_ state _]
-      (when-let [content (dm/get-in state [:workspace-drawing :object :content])]
+      (let [content (dm/get-in state [:workspace-drawing :object :content])]
         (if (> (count content) 1)
           (rx/of (setup-frame)
                  (dwdc/handle-finish-drawing)
@@ -337,26 +337,7 @@
          (->> stream
               (rx/filter (ptk/type? ::end-edition))
               (rx/take 1)
-              (rx/observe-on :async)
               (rx/map (partial handle-drawing-end shape-id))))))))
-
-(declare start-draw-mode*)
-
-(defn start-draw-mode
-  []
-  (ptk/reify ::start-draw-mode
-    ptk/UpdateEvent
-    (update [_ state]
-      (let [id      (dm/get-in state [:workspace-local :edition])
-            objects (dsh/lookup-page-objects state)
-            content (dm/get-in objects [id :content])]
-        (if content
-          (update-in state [:workspace-local :edit-path id] assoc :old-content content)
-          state)))
-
-    ptk/WatchEvent
-    (watch [_ _ _]
-      (rx/of (start-draw-mode*)))))
 
 (defn start-draw-mode*
   []
@@ -379,23 +360,43 @@
                                     (start-draw-mode*))))))
           (rx/empty))))))
 
+(defn start-draw-mode
+  []
+  (ptk/reify ::start-draw-mode
+    ptk/UpdateEvent
+    (update [_ state]
+      (let [id      (dm/get-in state [:workspace-local :edition])
+            objects (dsh/lookup-page-objects state)
+            content (dm/get-in objects [id :content])]
+
+        (if content
+          (update-in state [:workspace-local :edit-path id] assoc :old-content content)
+          state)))
+
+    ptk/WatchEvent
+    (watch [_ _ _]
+      (rx/of (start-draw-mode*)))))
+
 (defn change-edit-mode
   [mode]
   (ptk/reify ::change-edit-mode
     ptk/UpdateEvent
     (update [_ state]
       (if-let [id (dm/get-in state [:workspace-local :edition])]
-        (d/update-in-when state [:workspace-local :edit-path id] assoc :edit-mode mode)
-        state))
+        (update-in state [:workspace-local :edit-path id] assoc :edit-mode mode)
+
+        (if-let [id (dm/get-in state [:workspace-drawing :object :id])]
+          (do
+            (prn "BBB" id)
+            (update-in state [:workspace-local :edit-path id] assoc :edit-mode mode))
+          state)))
 
     ptk/WatchEvent
     (watch [_ state _]
-      (when-let [id (dm/get-in state [:workspace-local :edition])]
-        (let [mode (dm/get-in state [:workspace-local :edit-path id :edit-mode])]
-          (case mode
-            :move (rx/of (common/finish-path))
-            :draw (rx/of (start-draw-mode))
-            (rx/empty)))))))
+      (case mode
+        :move (rx/of (common/finish-path))
+        :draw (rx/of (start-draw-mode))
+        (rx/empty)))))
 
 (defn reset-last-handler
   []

@@ -44,26 +44,19 @@
 ;; Toolbar
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
-(defn hide-toolbar
-  []
-  (ptk/reify ::hide-toolbar
-    ptk/UpdateEvent
-    (update [_ state]
-      (assoc-in state [:workspace-local :hide-toolbar] true))))
-
 (defn show-toolbar
   []
   (ptk/reify ::show-toolbar
     ptk/UpdateEvent
     (update [_ state]
-      (assoc-in state [:workspace-local :hide-toolbar] false))))
+      (assoc-in state [:workspace-local :collapse-toolbar] false))))
 
 (defn toggle-toolbar-visibility
   []
   (ptk/reify ::toggle-toolbar-visibility
     ptk/UpdateEvent
     (update [_ state]
-      (update-in state [:workspace-local :hide-toolbar] not))))
+      (update-in state [:workspace-local :collapse-toolbar] not))))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;; Read only

@@ -66,22 +66,9 @@
         :ref ref
         :on-selected on-selected}]]]))
 
-(def ^:private toolbar-hidden-ref
-  (l/derived (fn [state]
-               (let [visibility      (get state :hide-toolbar)
-                     path-edit-state (get state :edit-path)
-
-                     selected        (get state :selected)
-                     edition         (get state :edition)
-                     single?         (= (count selected) 1)
-
-                     path-editing?   (and single? (some? (get path-edit-state edition)))]
-                 (if path-editing? true visibility)))
-             refs/workspace-local))
-
 (mf/defc top-toolbar*
   {::mf/memo true}
-  [{:keys [layout]}]
+  [{:keys [layout is-collapsed]}]
   (let [drawtool      (mf/deref refs/selected-drawing-tool)
         edition       (mf/deref refs/selected-edition)
 
@@ -90,7 +77,6 @@
 
         read-only?    (mf/use-ctx ctx/workspace-read-only?)
         rulers?       (mf/deref refs/rulers?)
-        hide-toolbar? (mf/deref toolbar-hidden-ref)
 
         interrupt
         (mf/use-fn #(st/emit! :interrupt (dw/clear-edition-mode)))
@@ -104,7 +90,7 @@
              (st/emit! :interrupt (dw/clear-edition-mode))
 
              ;; Delay so anything that launched :interrupt can finish
-             (ts/schedule 100 #(st/emit! (dw/select-for-drawing tool))))))
+             (ts/schedule 50 #(st/emit! (dw/select-for-drawing tool))))))
 
         toggle-debug-panel
         (mf/use-fn
@@ -116,7 +102,7 @@
              (st/emit!
               (dw/remove-layout-flag :shortcuts)
               (-> (dw/toggle-layout-flag :debug-panel)
-                  (vary-meta assoc ::ev/origin "workspace-left-toolbar"))))))
+                  (vary-meta assoc ::ev/origin "workspace:left-toolbar"))))))
 
         toggle-toolbar
         (mf/use-fn
@@ -132,7 +118,7 @@
     (when-not ^boolean read-only?
       [:aside {:class (stl/css-case :main-toolbar true
                                     :main-toolbar-no-rulers (not rulers?)
-                                    :main-toolbar-hidden hide-toolbar?)}
+                                    :main-toolbar-hidden is-collapsed)}
        [:ul {:class (stl/css :main-toolbar-options)
              :data-testid "toolbar-options"}
         [:li

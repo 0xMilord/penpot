@@ -70,7 +70,8 @@
   [{:keys [shape state]}]
   (let [{:keys [edit-mode selected-points snap-toggled]} state
 
-        content (:content shape)
+        ;; edit-mode (or edit-mode :draw)
+        content   (:content shape)
 
         enabled-buttons
         (mf/use-memo
@@ -79,6 +80,7 @@
 
         on-select-draw-mode
         (mf/use-fn
+         (mf/deps edit-mode)
          (fn [_]
            (st/emit! (drp/change-edit-mode :draw))))
 
