@@ -17,6 +17,11 @@
    [app.main.data.workspace.shapes :as dwsh]
    [app.main.data.workspace.undo :as dwu]
    [app.main.worker :as mw]
+   [app.common.types.shape.layout :as ctl]
+   [app.common.types.shape-tree :as ctst]
+   [app.common.types.container :as ctn]
+   [app.common.geom.point :as gpt]
+   [app.common.geom.shapes.flex-layout :as gsl]
    [beicon.v2.core :as rx]
    [potok.v2.core :as ptk]))
 
@@ -26,6 +31,29 @@
     ptk/UpdateEvent
     (update [_ state]
       (update state :workspace-drawing dissoc :tool :object))))
+
+(defn- setup-path-shape-parents
+  "A helper that properly setups the target frame and parent properties of the drawing shape"
+  [shape objects]
+  (let [content  (get shape :content)
+
+        ;; FIXME: use native operation for retrieve the first position
+        position     (-> (nth content 0)
+                         (get :params)
+                         (gpt/point))
+
+        frame-id     (->> (ctst/top-nested-frame objects position)
+                          (ctn/get-first-not-copy-parent objects) ;; We don't want to change the structure of component copies
+                          :id)
+        flex-layout? (ctl/flex-layout? objects frame-id)
+        drop-index   (when flex-layout? (gsl/get-drop-index frame-id objects position))]
+
+    (-> shape
+        (assoc :frame-id frame-id)
+        (assoc :parent-id frame-id)
+        (cond-> (some? drop-index)
+          (vary-meta assoc :index drop-index)))))
+
 
 (defn handle-finish-drawing
   []
@@ -68,7 +96,8 @@
 
                    (or (cfh/path-shape? shape)
                        (cfh/bool-shape? shape))
-                   (update :content path/content)
+                   (-> (update :content path/content)
+                       (setup-path-shape-parents objects))
 
                    :always
                    (dissoc :initialized? :click-draw?))]

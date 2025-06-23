@@ -274,33 +274,6 @@
                    (rx/take-until stoper-stream))
               (rx/of (ptk/data-event ::end-edition {:id id}))))))))
 
-(defn setup-frame
-  []
-  (ptk/reify ::setup-frame
-    ptk/UpdateEvent
-    (update [_ state]
-      (let [objects      (dsh/lookup-page-objects state)
-            content      (get-in state [:workspace-drawing :object :content] [])
-
-            ;; FIXME: use native operation for retrieve the first position
-            position     (-> (nth content 0)
-                             (get :params)
-                             (gpt/point))
-
-            frame-id     (->> (ctst/top-nested-frame objects position)
-                              (ctn/get-first-not-copy-parent objects) ;; We don't want to change the structure of component copies
-                              :id)
-            flex-layout? (ctl/flex-layout? objects frame-id)
-            drop-index   (when flex-layout? (gsl/get-drop-index frame-id objects position))]
-
-        (update-in state [:workspace-drawing :object]
-                   (fn [object]
-                     (-> object
-                         (assoc :frame-id frame-id)
-                         (assoc :parent-id frame-id)
-                         (cond-> (some? drop-index)
-                           (with-meta {:index drop-index})))))))))
-
 (defn- handle-drawing-end
   [shape-id]
   (ptk/reify ::handle-drawing-end
@@ -315,12 +288,11 @@
     ptk/WatchEvent
     (watch [_ state _]
       (let [content (dm/get-in state [:workspace-drawing :object :content])]
-        (if (>= (count content) 1)
-          (rx/of (setup-frame)
-                 (dwdc/handle-finish-drawing)
-                 (dwe/start-edition-mode shape-id)
-                 (change-edit-mode :draw))
-          (rx/of (dwdc/handle-finish-drawing)))))))
+        (rx/concat
+         (rx/of (dwdc/handle-finish-drawing))
+         (when (pos? (count content))
+           (rx/of (dwe/start-edition-mode shape-id)
+                  (change-edit-mode :draw))))))))
 
 (defn handle-drawing
   "Hanndle the start of drawing new path shape"
@@ -408,7 +380,7 @@
       (let [id (st/get-path-id state)]
         (assoc-in state [:workspace-local :edit-path id :prev-handler] nil)))))
 
-(defn check-changed-content
+(defn- check-changed-content
   []
   (ptk/reify ::check-changed-content
     ptk/WatchEvent
