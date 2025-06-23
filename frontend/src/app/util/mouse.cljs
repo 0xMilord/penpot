@@ -69,9 +69,11 @@
   [^PointerEvent ev]
   (.-shift ev))
 
+;; FIXME: deprecated
 (defn drag-stopper
-  "Creates a stream to stop drag events. Takes into account the mouse and also
-  if the window loses focus or the esc key is pressed."
+  "Get a stream for signal STOP of dragging events; it takes akes into
+  account the mouse and also if the window loses focus or the esc key
+  is pressed."
   ([stream]
    (drag-stopper stream nil))
   ([stream {:keys [blur? up-mouse? interrupt?] :or {blur? true up-mouse? true interrupt? true}}]

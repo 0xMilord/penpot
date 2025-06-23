@@ -159,3 +159,26 @@
                  (rx/pipe (rxo/distinct-contiguous)))]
     (rx/sub! ob sub)
     sub))
+
+(defn get-drag-stopper
+  "Get a stream for signal STOP of dragging events; it takes akes into
+  account the mouse and also if the window loses focus or the esc key
+  is pressed."
+  ([]
+   (get-drag-stopper nil))
+  ([{:keys [blur? up-mouse? interrupt?] :or {blur? true up-mouse? true interrupt? true}}]
+   (rx/merge
+    (if blur?
+      (->> st/stream
+           (rx/filter mse/blur-event?))
+      (rx/empty))
+    (if up-mouse?
+      (->> st/stream
+           (rx/filter mse/mouse-event?)
+           (rx/filter mse/mouse-up-event?))
+      (rx/empty))
+    (if interrupt?
+      (->> st/stream
+           (rx/filter #(= % :interrupt)))
+      (rx/empty)))))
+

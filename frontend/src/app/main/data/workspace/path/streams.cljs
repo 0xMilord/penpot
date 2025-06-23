@@ -11,6 +11,7 @@
    [app.common.types.path.segment :as path.segm]
    [app.main.constants :refer [zoom-half-pixel-precision]]
    [app.main.data.workspace.path.state :as pst]
+   [app.main.data.workspace.edition :as-alias dwe]
    [app.main.snap :as snap]
    [app.main.store :as st]
    [app.main.streams :as ms]
@@ -25,8 +26,8 @@
   (fn [current]
     (>= (gpt/distance start current) (/ drag-threshold zoom))))
 
-(defn finish-edition? [event]
-  (= (ptk/type event) :app.main.data.workspace.common/clear-edition-mode))
+;; (defn finish-edition? [event]
+;;   (= (ptk/type event) :app.main.data.workspace.common/clear-edition-mode))
 
 (defn to-pixel-snap [position]
   (let [zoom  (get-in @st/state [:workspace-local :zoom] 1)
@@ -43,26 +44,22 @@
       :else
       (gpt/round position))))
 
+;; FIXME: receive zoom by params
+
 (defn drag-stream
   ([to-stream]
    (drag-stream to-stream (rx/empty)))
 
   ([to-stream not-drag-stream]
    (let [zoom  (get-in @st/state [:workspace-local :zoom] 1)
-
          start (-> @ms/mouse-position to-pixel-snap)
-
-         stopper (rx/merge
-                  (mse/drag-stopper st/stream)
-                  (->> st/stream
-                       (rx/filter finish-edition?)))
 
          position-stream
          (->> ms/mouse-position
               (rx/map to-pixel-snap)
               (rx/filter (dragging? start zoom))
               (rx/take 1)
-              (rx/take-until stopper))]
+              (rx/take-until (ms/get-drag-stopper)))]
 
      (rx/merge
       (->> position-stream

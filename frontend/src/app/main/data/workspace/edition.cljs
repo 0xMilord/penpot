@@ -7,7 +7,6 @@
 (ns app.main.data.workspace.edition
   (:require
    [app.main.data.helpers :as dsh]
-   [app.main.data.workspace.path.common :as dwpc]
    [beicon.v2.core :as rx]
    [potok.v2.core :as ptk]))
 

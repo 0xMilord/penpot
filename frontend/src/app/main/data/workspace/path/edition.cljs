@@ -281,12 +281,9 @@
                      (+ start-delta-y (- (:y pos) (:y handler)))
                      (not alt?)))))
                (rx/take-until
-                (rx/merge
-                 (mse/drag-stopper stream)
-                 (->> stream
-                      (rx/filter streams/finish-edition?)))))
+                (ms/get-drag-stopper)))
 
-          (rx/concat (rx/of (apply-content-modifiers)))))))))
+          (rx/of (apply-content-modifiers))))))))
 
 (declare stop-path-edit)
 

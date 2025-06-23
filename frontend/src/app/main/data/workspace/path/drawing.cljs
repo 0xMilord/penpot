@@ -28,6 +28,7 @@
    [app.main.data.workspace.path.undo :as undo]
    [app.main.data.workspace.shapes :as dwsh]
    [app.util.mouse :as mse]
+   [app.main.streams :as ms]
    [beicon.v2.core :as rx]
    [potok.v2.core :as ptk]))
 
@@ -49,7 +50,7 @@
           ^boolean (mse/mouse-double-click-event? event)))))
 
 (defn preview-next-point
-  [{:keys [x y shift?]}]
+  [id {:keys [x y shift?]}]
   (ptk/reify ::preview-next-point
     ptk/UpdateEvent
     (update [_ state]
@@ -138,7 +139,7 @@
       (let [id (st/get-path-id state)
             handler (get-in state [:workspace-local :edit-path id :prev-handler])]
         ;; Update the preview because can be outdated after the dragging
-        (rx/of (preview-next-point handler)
+        (rx/of (preview-next-point id handler)
                (undo/merge-head))))))
 
 (defn close-path-drag-start
@@ -177,22 +178,25 @@
       (let [id (st/get-path-id state)]
         (update-in state [:workspace-local :edit-path id] dissoc :prev-handler)))))
 
-(defn start-path-from-point [position]
+(defn start-path-from-point
+  [position]
   (ptk/reify ::start-path-from-point
     ptk/WatchEvent
     (watch [_ state stream]
-      (let [stopper (rx/merge
-                     (mse/drag-stopper stream)
-                     (rx/filter end-path-event? stream))
+      (let [stopper-stream
+            (rx/merge
+             (mse/drag-stopper stream)
+             (rx/filter end-path-event? stream))
 
-            drag-events (->> (streams/position-stream state)
-                             (rx/map #(drag-handler %))
-                             (rx/take-until stopper))]
+            drag-events-stream
+            (->> (streams/position-stream state)
+                 (rx/map #(drag-handler %))
+                 (rx/take-until stopper-stream))]
+
         (rx/concat
          (rx/of (add-node position))
          (streams/drag-stream
-          (rx/concat
-           drag-events
+          (rx/concat drag-events-stream
            (rx/of (finish-drag)))))))))
 
 (defn make-node-events-stream
@@ -208,23 +212,26 @@
   (assert (gpt/point? down-event)
           "should be a point instance")
 
-  (let [stopper (rx/merge
-                 (mse/drag-stopper stream)
-                 (rx/filter end-path-event? stream))
+  (let [stopper
+        (rx/merge
+         (ms/get-drag-stopper)
+         (rx/filter end-path-event? stream))
 
         drag-events
         (->> (streams/position-stream state)
              (rx/map #(drag-handler %))
              (rx/take-until stopper))]
+
     (rx/concat
      (rx/of (add-node down-event))
      (streams/drag-stream
       (rx/concat
        drag-events
-       (rx/of (finish-drag)))))))
+       (rx/of (finish-drag))))
+     (rx/of (ptk/data-event ::node-added)))))
 
 (defn- start-edition
-  [_id]
+  [id]
   (ptk/reify ::start-edition
     ptk/WatchEvent
     (watch [_ state stream]
@@ -246,7 +253,7 @@
             ;; Mouse move preview
             mousemove-events
             (->> (streams/position-stream state)
-                 (rx/map #(preview-next-point %)))
+                 (rx/map #(preview-next-point id %)))
 
             ;; From mouse down we can have: click, drag and double click
             mousedown-events
@@ -265,7 +272,7 @@
               (->> (rx/merge mousemove-events
                              mousedown-events)
                    (rx/take-until stoper-stream))
-              (rx/of (ptk/data-event ::end-edition))))))))
+              (rx/of (ptk/data-event ::end-edition {:id id}))))))))
 
 (defn setup-frame
   []
@@ -330,7 +337,7 @@
         (rx/concat
          (rx/of (start-edition shape-id))
          (->> stream
-              (rx/filter (ptk/type? ::add-node))
+              (rx/filter (ptk/type? ::node-added))
               (rx/take 1)
               (rx/map (partial handle-drawing-end shape-id))))))))
 
