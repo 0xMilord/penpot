@@ -27,6 +27,7 @@
   (ptk/reify ::select-for-drawing
     ptk/UpdateEvent
     (update [_ state]
+      (prn "select-for-drawing" tool)
       (-> state
           (update :workspace-layout (fn [workspace-layout]
                                       (if (= tool :comments)

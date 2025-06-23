@@ -65,6 +65,7 @@
    (ptk/reify ::save-path-content
      ptk/UpdateEvent
      (update [_ state]
+       (prn "save-path-content" "update")
        (let [content (st/get-path state :content)
              content (if (and (not preserve-move-to)
                               (= (-> content last :command) :move-to))

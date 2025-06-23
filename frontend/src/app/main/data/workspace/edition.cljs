@@ -50,12 +50,4 @@
       (-> state
           (update :workspace-local dissoc :edition :edit-path)
           (update :workspace-drawing dissoc :tool :object :lock)
-          (dissoc :workspace-grid-edition)))
-
-    ptk/WatchEvent
-    (watch [_ state _]
-      (let [id (get-in state [:workspace-local :edition])]
-        (rx/concat
-         (when (some? id)
-           (dwpc/finish-path)))))))
-
+          (dissoc :workspace-grid-edition)))))

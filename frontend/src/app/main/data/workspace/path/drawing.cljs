@@ -226,11 +226,6 @@
 (defn- start-edition
   [_id]
   (ptk/reify ::start-edition
-    ptk/UpdateEvent
-    (update [_ state]
-      (let [id (st/get-path-id state)]
-        (assoc-in state [:workspace-local :edit-path id :edit-mode] :draw)))
-
     ptk/WatchEvent
     (watch [_ state stream]
       (let [mouse-down
@@ -306,14 +301,14 @@
     (update [_ state]
       (let [content (some-> (dm/get-in state [:workspace-drawing :object :content])
                             (path/check-path-content))]
-        (if (> (count content) 1)
+        (if (>= (count content) 1)
           (assoc-in state [:workspace-drawing :object :initialized?] true)
           state)))
 
     ptk/WatchEvent
     (watch [_ state _]
       (let [content (dm/get-in state [:workspace-drawing :object :content])]
-        (if (> (count content) 1)
+        (if (>= (count content) 1)
           (rx/of (setup-frame)
                  (dwdc/handle-finish-drawing)
                  (dwe/start-edition-mode shape-id)
@@ -335,7 +330,7 @@
         (rx/concat
          (rx/of (start-edition shape-id))
          (->> stream
-              (rx/filter (ptk/type? ::end-edition))
+              (rx/filter (ptk/type? ::add-node))
               (rx/take 1)
               (rx/map (partial handle-drawing-end shape-id))))))))
 
@@ -416,6 +411,8 @@
             old-content (get-in state [:workspace-local :edit-path id :old-content])
             mode (get-in state [:workspace-local :edit-path id :edit-mode])
             empty-content? (empty? content)]
+
+        (prn "check-changed-content")
 
         (cond
           (and (not= content old-content) (not empty-content?))
