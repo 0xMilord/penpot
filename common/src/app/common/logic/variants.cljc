@@ -66,52 +66,41 @@
       shapes))))
 
 (defn- keep-swapped-item
-  [changes current-shape previous-shape previous-shapes ldata page libraries orig-ref-shape]
-  (let [objects (pcb/get-objects changes)
-
-        previous-shapes-map       (into {} (map (juxt :id identity) previous-shapes))
-
-        current-shape-ref-shape (ctf/find-ref-shape nil {:objects objects} libraries current-shape)
-
-        swap-slot (ctk/get-swap-slot previous-shape)
-        swap-ref (ctk/get-swap-ref previous-shape)
-
-        ;; TODO ??
-        update-swap-slot? (contains? previous-shapes-map swap-slot)
-
-
-
-        prev-shapes-ids (->> (cfh/get-children-with-self previous-shapes-map (:id previous-shape))
-                             (map :id)
-                             set)
+  [changes current-shape prev-shape prev-objects ldata page swap-ref-id]
+  (let [objects         (pcb/get-objects changes)
+        prev-swap-slot  (ctk/get-swap-slot prev-shape)
 
         ;; TODO This is waaaaay too dirty
-        fake-changes (-> changes
-                         (assoc :redo-changes [])
-                         (pcb/change-parent uuid/zero [previous-shape] 0 {:component-swap true})
-                         (pcb/update-shapes
-                          [(:id previous-shape)]
-                          (fn [shape]
-                            (cond-> shape
-                              (= swap-slot swap-ref)
-                              (ctk/set-swap-slot (:id current-shape-ref-shape))
-                              (not= swap-slot swap-ref)
-                              (ctk/set-swap-slot swap-slot)
-                              :always
-                              (ctk/set-swap-ref (:id current-shape-ref-shape))))))
+        fake-changes (cond-> changes
+                       :always
+                       (assoc :redo-changes [])
 
+                       :always
+                       ;; Temporary move the previous shape to the root panel
+                       (pcb/change-parent uuid/zero [prev-shape] 0 {:component-swap true})
+
+                       (= prev-swap-slot swap-ref-id)
+                       ;; We need to update the swap slot only when it pointed
+                       ;; to the swap-ref-id
+                       (pcb/update-shapes
+                        [(:id prev-shape)]
+                        #(ctk/set-swap-slot % (:shape-ref current-shape))))
+
+        remove-deletion-ids (->> (cfh/get-children-with-self prev-objects (:id prev-shape))
+                                 (map :id)
+                                 set)
 
         ;; remove the delete changes for the swapped item and its children
         ;; TODO: Maybe it makes sense to change the deletion process to don't add them
         ;; on the first place
-        redo   (remove #(and (= (:type %) :del-obj) (contains? prev-shapes-ids (:id %))) (:redo-changes changes))
+        redo   (remove #(and (= (:type %) :del-obj) (contains? remove-deletion-ids (:id %))) (:redo-changes changes))
         changes (assoc changes :redo-changes redo)
 
         ;; TODO undo-changes?
         changes (-> (assoc changes :redo-changes (into (:redo-changes fake-changes) redo))
                     #_(pcb/concat-changes fake-changes changes)
                     ;; TODO Keep pos
-                    (pcb/change-parent (:parent-id current-shape) [previous-shape] 0 {:component-swap true}))]
+                    (pcb/change-parent (:parent-id current-shape) [prev-shape] 0 {:component-swap true}))]
 
       ;; Delete new non-swapped item
     (-> changes
@@ -149,6 +138,8 @@
                                  #(child-of-swapped? %
                                                      page-objects
                                                      (:id original-shape))))
+        original-objects   (into {} (map (juxt :id identity) original-shapes))
+
         new-shapes-w-path  (add-unique-path
                             (reverse (cfh/get-children-with-self objects (:id new-shape)))
                             objects
@@ -182,7 +173,7 @@
 
          (if current-shape
            (if swap-slot
-             (keep-swapped-item changes current-shape previous-shape original-shapes ldata page libraries orig-ref-shape)
+             (keep-swapped-item changes current-shape previous-shape original-objects ldata page swap-ref-id)
              (cll/update-attrs-on-switch
               changes current-shape previous-shape new-shape original-shape prev-shape-ref container))
            changes)))

@@ -244,19 +244,9 @@
   (when swap-slot
     (keyword (str "swap-slot-" swap-slot))))
 
-(defn build-swap-ref-group
-  "Convert a swap-ref into a :touched group"
-  [swap-ref]
-  (when swap-ref
-    (keyword (str "swap-ref-" swap-ref))))
-
 (defn swap-slot?
   [group]
   (str/starts-with? (name group) "swap-slot-"))
-
-(defn swap-ref?
-  [group]
-  (str/starts-with? (name group) "swap-ref-"))
 
 (defn normal-touched-groups
   "Gets all touched groups that are not swap slots."
@@ -266,10 +256,6 @@
 (defn group->swap-slot
   [group]
   (parse-uuid (subs (name group) 10)))
-
-(defn group->swap-ref
-  [group]
-  (parse-uuid (subs (name group) 9)))
 
 (defn get-swap-slot
   "If the shape has a :touched group in the form :swap-slot-<uuid>, get the id."
@@ -284,20 +270,6 @@
   (cond-> shape
     (some? swap-slot)
     (update :touched set-touched-group (build-swap-slot-group swap-slot))))
-
-(defn get-swap-ref
-  "If the shape has a :touched group in the form :swap-ref-<uuid>, get the id."
-  [shape]
-  (let [group (d/seek swap-ref? (:touched shape))]
-    (when group
-      (group->swap-ref group))))
-
-(defn set-swap-ref
-  "Add a touched group with a form :swap-ref-<uuid>."
-  [shape swap-ref]
-  (cond-> shape
-    (some? swap-ref)
-    (update :touched set-touched-group (build-swap-ref-group swap-ref))))
 
 (defn match-swap-slot?
   [shape-main shape-inst]
