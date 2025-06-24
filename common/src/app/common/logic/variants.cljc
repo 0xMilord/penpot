@@ -123,7 +123,6 @@
         (cls/generate-delete-shapes ldata page objects (d/ordered-set (:id current-shape)) {:component-swap true})
         second)))
 
-
 (defn generate-keep-touched
   [changes new-shape original-shape original-shapes page libraries ldata]
   (let [objects            (pcb/get-objects changes)
@@ -145,26 +144,21 @@
         o-ref-shapes-p-map (into {} (map (juxt :id :shape-path) o-ref-shapes-wp))]
     (reduce
      (fn [changes previous-shape]
-       (let [;; TODO use `ctf/find-swap-slot` ?
-             swap-slot      (ctk/get-swap-slot previous-shape)
-             swap-ref       (ctk/get-swap-ref previous-shape)
-             prev-shape-ref (ctf/find-ref-shape nil container libraries previous-shape)
+       (let [swap-slot      (ctk/get-swap-slot previous-shape)
+             ;; If there is no swap slot, get the referenced shape
+             prev-shape-ref (when-not swap-slot
+                              ;; TODO Maybe just get it from o-ref-shapes-wp
+                              (ctf/find-ref-shape nil container libraries previous-shape))
+             ;; If there is a swap slot, find the related shape id
+             swap-ref-id    (when swap-slot
+                              (ctf/find-ref-id-for-swapped previous-shape container libraries))
+
+
              shape-path     (or (get o-ref-shapes-p-map (:id prev-shape-ref))
-                                (get o-ref-shapes-p-map swap-slot)
-                                (get o-ref-shapes-p-map swap-ref))
+                                (get o-ref-shapes-p-map swap-ref-id))
 
-             current-shape  (get new-shapes-map shape-path)
+             current-shape  (get new-shapes-map shape-path)]
 
-
-
-
-             _ (prn "prev-shape-ref" (:id prev-shape-ref))
-             _ (prn "shape-path" shape-path)
-             _ (prn "current-shape" (:id current-shape))
-
-             ss (ctf/find-swap-slot previous-shape container nil libraries)
-             _ (prn "swap-slot" swap-slot)
-             _ (prn "ss" ss)]
          ;; TODO Ignore children of swapped items
          (if current-shape
            (if swap-slot

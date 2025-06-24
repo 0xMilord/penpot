@@ -6,13 +6,17 @@
 
 (ns debug
   (:require
+
    [app.common.data :as d]
    [app.common.data.macros :as dm]
+   [app.common.files.helpers :as cfh]
    [app.common.files.repair :as cfr]
    [app.common.files.validate :as cfv]
    [app.common.json :as json]
    [app.common.logging :as l]
    [app.common.transit :as t]
+   [app.common.types.component :as ctk]
+   [app.common.types.container :as ctn]
    [app.common.types.file :as ctf]
    [app.common.uuid :as uuid]
    [app.main.data.changes :as dwc]
@@ -438,3 +442,73 @@
 (defn ^:export set-shape-ref
   [id shape-ref]
   (st/emit! (set-shape-ref* id shape-ref)))
+
+;;;;;;;;;;;;;;;;;
+
+
+(defn go-back2
+  [shape id objects container libraries]
+  (let [_ (prn "go back" (:id shape))
+        child (->> (cfh/get-children objects (:id shape))
+                   (filter #(= id (:shape-ref %)))
+                   first)
+        shape-ref (ctf/find-ref-shape nil container libraries shape)]
+    (cond
+      (not shape-ref)
+      nil
+      child
+      child
+      :else
+      (go-back2 shape-ref id objects container libraries))))
+
+(defn find-next-related-swap-shape
+  "Go up from the chain of references shapes that will eventually lead to the shape
+   with swap-slot-id as id. Returns the next shape on the chain"
+  [shape swap-slot-id objects container libraries]
+  (let [children          (cfh/get-children objects (:id shape))
+        original-shape-id (->> children
+                               (filter #(= swap-slot-id (:id %)))
+                               first
+                               :id)]
+    (if original-shape-id
+      ;; Return the children which id is the swap-slot-id
+      original-shape-id
+      ;; No children with swap-slot-id as id, go up
+      (let [referenced-shape (ctf/find-ref-shape nil container libraries shape)
+            ;; Recursive call that will get the id of the next shape on
+            ;; the chain that ends on a shape with swap-slot-id as id
+            next-shape-id    (when referenced-shape
+                               (find-next-related-swap-shape referenced-shape swap-slot-id objects container libraries))]
+        ;; Return the children which shape-ref points to the next-shape-id
+        (->> children
+             (filter #(= next-shape-id (:shape-ref %)))
+             first
+             :id)))))
+
+(defn- ffind-shape
+  []
+  (ptk/reify ::ffind-shape
+    ptk/WatchEvent
+    (watch [_ state _]
+
+      (let [objects (dsh/lookup-page-objects state)
+            libraries (:files state)
+            page (dsh/lookup-page state)
+            container          (ctn/make-container page :page)
+
+
+            shape  (->> (get-selected state) (map #(get objects %)) first)
+            swap-slot (ctk/get-swap-slot shape)
+
+            parent (get objects (:parent-id shape))
+            parent-head (ctn/get-head-shape objects parent)
+
+            parent-ref (ctf/find-ref-shape nil container libraries parent-head)
+
+            gb (find-next-related-swap-shape parent-ref swap-slot objects container libraries)]
+        (logjs "gb" gb)
+        nil))))
+
+(defn ^:export find-shape
+  []
+  (st/emit! (ffind-shape)))
