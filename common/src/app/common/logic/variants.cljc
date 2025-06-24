@@ -70,21 +70,19 @@
   (let [objects         (pcb/get-objects changes)
         prev-swap-slot  (ctk/get-swap-slot prev-shape)
 
-        ;; TODO This is waaaaay too dirty
-        fake-changes (cond-> changes
-                       :always
-                       (assoc :redo-changes [])
-
-                       :always
+        ;; Changes to do previous to the changes
+        pre-changes (cond-> (pcb/clear-changes changes)
+                      :always
                        ;; Temporary move the previous shape to the root panel
-                       (pcb/change-parent uuid/zero [prev-shape] 0 {:component-swap true})
+                      (pcb/change-parent uuid/zero
+                                         [prev-shape] 0 {:component-swap true})
 
-                       (= prev-swap-slot swap-ref-id)
+                      (= prev-swap-slot swap-ref-id)
                        ;; We need to update the swap slot only when it pointed
                        ;; to the swap-ref-id
-                       (pcb/update-shapes
-                        [(:id prev-shape)]
-                        #(ctk/set-swap-slot % (:shape-ref current-shape))))
+                      (pcb/update-shapes
+                       [(:id prev-shape)]
+                       #(ctk/set-swap-slot % (:shape-ref current-shape))))
 
         remove-deletion-ids (->> (cfh/get-children-with-self prev-objects (:id prev-shape))
                                  (map :id)
@@ -97,7 +95,7 @@
         changes (assoc changes :redo-changes redo)
 
         ;; TODO undo-changes?
-        changes (-> (assoc changes :redo-changes (into (:redo-changes fake-changes) redo))
+        changes (-> (assoc changes :redo-changes (into (:redo-changes pre-changes) redo))
                     #_(pcb/concat-changes fake-changes changes)
                     ;; TODO Keep pos
                     (pcb/change-parent (:parent-id current-shape) [prev-shape] 0 {:component-swap true}))]
