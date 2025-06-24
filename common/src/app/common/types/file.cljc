@@ -401,17 +401,14 @@
   "Go up from the chain of references shapes that will eventually lead to the shape
    with swap-slot-id as id. Returns the next shape on the chain"
   [parent swap-slot-id libraries]
-  (let [_ (prn "find-next-related-swap-shape-id")
-        container         (get-comp-container-from-head parent libraries)
-        _ (prn "container" container)
+  (let [container         (get-comp-container-from-head parent libraries)
         objects           (:objects container)
 
         children          (cfh/get-children objects (:id parent))
         original-shape-id (->> children
                                (filter #(= swap-slot-id (:id %)))
                                first
-                               :id)
-        _ (prn "original-shape-id" original-shape-id)]
+                               :id)]
     (if original-shape-id
       ;; Return the children which id is the swap-slot-id
       original-shape-id

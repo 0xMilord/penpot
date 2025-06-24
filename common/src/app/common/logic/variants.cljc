@@ -75,14 +75,9 @@
 
         swap-slot (ctk/get-swap-slot previous-shape)
         swap-ref (ctk/get-swap-ref previous-shape)
-        update-swap-slot? (contains? previous-shapes-map swap-slot)
 
-        _ (prn "orig-ref-shape" (:id orig-ref-shape))
-        _ (prn "previous-shapes-map" (keys previous-shapes-map))
-        _ (prn "current-shape-ref-shape" (:id current-shape-ref-shape))
-        _ (prn "swap-slot" swap-slot)
-        _ (prn "swap-ref" swap-ref)
-        _ (prn "update-swap-slot?" update-swap-slot?)
+        ;; TODO ??
+        update-swap-slot? (contains? previous-shapes-map swap-slot)
 
 
 
@@ -123,13 +118,37 @@
         (cls/generate-delete-shapes ldata page objects (d/ordered-set (:id current-shape)) {:component-swap true})
         second)))
 
+
+(defn- child-of-swapped?
+  "Check if any ancestor of a shape (until reach a base-parent-id) was swapped"
+  [shape objects base-parent-id]
+  (->> (ctn/get-parent-heads objects shape)
+       ;; Ignore ancestors ahead of base-parent
+       (drop-while #(not= base-parent-id (:id %)))
+       (vec)
+       ;; Ignore first and last (base-parent and shape)
+       (pop)
+       (rest)
+       (some ctk/get-swap-slot)))
+
 (defn generate-keep-touched
+  "On a switch operation, copy the touched attributes from the original shape
+   and its children to the new shape (and its children).
+   The match between shapes are defined by their names on the components and
+   their shape-path (a string formed by the types of its ancestors)"
   [changes new-shape original-shape original-shapes page libraries ldata]
   (let [objects            (pcb/get-objects changes)
         container          (ctn/make-container page :page)
+        page-objects       (:objects page)
 
-        orig-touched       (filter (comp seq :touched) original-shapes)
-
+        orig-touched       (->> (filter (comp seq :touched) original-shapes)
+                                ;; Ignore children of swapped items, because
+                                ;; they will be moved without change when
+                                ;; managing their swapped ancestor
+                                (remove
+                                 #(child-of-swapped? %
+                                                     page-objects
+                                                     (:id original-shape))))
         new-shapes-w-path  (add-unique-path
                             (reverse (cfh/get-children-with-self objects (:id new-shape)))
                             objects
@@ -145,6 +164,7 @@
     (reduce
      (fn [changes previous-shape]
        (let [swap-slot      (ctk/get-swap-slot previous-shape)
+
              ;; If there is no swap slot, get the referenced shape
              prev-shape-ref (when-not swap-slot
                               ;; TODO Maybe just get it from o-ref-shapes-wp
@@ -159,7 +179,7 @@
 
              current-shape  (get new-shapes-map shape-path)]
 
-         ;; TODO Ignore children of swapped items
+
          (if current-shape
            (if swap-slot
              (keep-swapped-item changes current-shape previous-shape original-shapes ldata page libraries orig-ref-shape)
