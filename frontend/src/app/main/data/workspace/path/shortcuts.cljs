@@ -22,9 +22,17 @@
 (defn esc-pressed []
   (ptk/reify ::esc-pressed
     ptk/WatchEvent
-    (watch [_ _ _]
+    (watch [it _ _]
+      (prn "esc-pressed" (ptk/type it))
       ;; Not interrupt when we're editing a path
       (rx/of :interrupt))))
+
+(defn enter-pressed []
+  (ptk/reify ::enter-pressed
+    ptk/WatchEvent
+    (watch [_ _ _]
+      ;; Not interrupt when we're editing a path
+      #_(rx/of :interrupt))))
 
 (def shortcuts
   {:move-nodes      {:tooltip "M"
@@ -79,8 +87,12 @@
                      :fn #(st/emit! (drp/toggle-snap))}
 
    :escape          {:tooltip (ds/esc)
-                     :command ["escape" "enter" "v"]
+                     :command ["escape" "v" "enter"]
                      :fn #(st/emit! (esc-pressed))}
+
+   ;; :enter           {:tooltip (ds/esc)
+   ;;                   :command ["enter"]
+   ;;                   :fn #(st/emit! (enter-pressed))}
 
    :undo            {:tooltip (ds/meta "Z")
                      :command (ds/c-mod "z")

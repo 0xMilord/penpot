@@ -729,7 +729,7 @@
                 :svg-raw
                 nil
 
-                (rx/of (dwe/start-edition-mode id)
+                (rx/of #_(dwe/start-edition-mode id)
                        (dwdp/start-path-edit id))))
 
           ;; When we have multiple shapes selected, instead of enter
