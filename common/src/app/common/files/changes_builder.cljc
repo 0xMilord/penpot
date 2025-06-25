@@ -52,10 +52,6 @@
     :undo-changes '()
     :origin origin}))
 
-(defn clear-changes
-  [changes]
-  (assoc changes :redo-changes [] :undo-changes '()))
-
 (defn set-save-undo?
   [changes save-undo?]
   (assoc changes :save-undo? save-undo?))
@@ -125,6 +121,16 @@
   [changes1 changes2]
   (-> changes1
       (update :redo-changes d/concat-vec (:redo-changes changes2))
+      (update :undo-changes #(concat (:undo-changes changes2) %))))
+
+(defn concat-changes-redo
+  [changes1 changes2]
+  (-> changes1
+      (update :redo-changes d/concat-vec (:redo-changes changes2))))
+
+(defn concat-changes-undo
+  [changes1 changes2]
+  (-> changes1
       (update :undo-changes #(concat (:undo-changes changes2) %))))
 
 ; TODO: remove this when not needed
@@ -478,12 +484,14 @@
          (fn [undo-changes shape]
            (let [prev-sibling (cfh/get-prev-sibling objects (:id shape))]
              (conj undo-changes
-                   {:type :mov-objects
-                    :page-id (::page-id (meta changes))
-                    :parent-id (:parent-id shape)
-                    :shapes [(:id shape)]
-                    :after-shape prev-sibling
-                    :index 0}))) ; index is used in case there is no after-shape (moving bottom shapes)
+                   (cond-> {:type :mov-objects
+                            :page-id (::page-id (meta changes))
+                            :parent-id (:parent-id shape)
+                            :shapes [(:id shape)]
+                            :after-shape prev-sibling
+                            :index 0} ; index is used in case there is no after-shape (moving bottom shapes)
+                     (:component-swap options)
+                     (assoc :component-swap true)))))
 
          restore-touched-change
          {:type :mod-obj
@@ -566,7 +574,6 @@
                changes
                (let [[rops uops] (-> (or attrs (d/concat-set (keys old-obj) (keys new-obj)))
                                      (generate-operations old-obj new-obj))
-
                      uops        (cond-> uops
                                    (seq uops)
                                    (conj {:type :set-touched :touched (:touched old-obj)}))

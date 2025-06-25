@@ -88,7 +88,7 @@
                                (pcb/with-library-data file))
                            ids
                            options))
-  ([changes ids {:keys [ignore-touched component-swap]}]
+  ([changes ids {:keys [ignore-touched component-swap ignore-swapped-children]}]
    (let [objects (pcb/get-objects changes)
          data    (pcb/get-library-data changes)
          page-id (pcb/get-page-id changes)
@@ -166,10 +166,20 @@
                  (d/ordered-set)
                  (concat ids-to-delete ids-to-hide))
 
+         ;; Children of deleted shapes must be also deleted,
+         ;; except the swapped children when the flag
+         ;; ignore-swapped-children is true
          all-children
-         (->> ids-to-delete ;; Children of deleted shapes must be also deleted.
+         (->> ids-to-delete
               (reduce (fn [res id]
-                        (into res (cfh/get-children-ids objects id)))
+                        (into res (cfh/get-children-ids
+                                   objects
+                                   id
+                                   {:ignore-fn
+                                    (if ignore-swapped-children
+                                      #(-> (get objects %)
+                                           (ctk/get-swap-slot))
+                                      (constantly false))})))
                       [])
               (reverse)
               (into (d/ordered-set)))

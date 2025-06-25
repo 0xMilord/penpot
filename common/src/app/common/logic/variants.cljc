@@ -66,37 +66,78 @@
       shapes))))
 
 (defn- keep-swapped-item
-  [changes current-shape prev-shape prev-objects ldata page swap-ref-id]
+  [changes current-shape prev-shape ldata page swap-ref-id]
   (let [objects         (pcb/get-objects changes)
         prev-swap-slot  (ctk/get-swap-slot prev-shape)
 
         ;; Changes to do previous to the changes
-        pre-changes (cond-> (pcb/clear-changes changes)
-                      :always
-                       ;; Temporary move the previous shape to the root panel
-                      (pcb/change-parent uuid/zero
-                                         [prev-shape] 0 {:component-swap true})
+        pre-changes (-> (pcb/empty-changes)
+                        (pcb/with-page page)
+                        (pcb/with-objects (:objects page))
+                        ;; Temporary move the previous shape to the root panel
+                        (pcb/change-parent uuid/zero [prev-shape] 0 {:component-swap true})
+                        (cond->
+                         ;; We need to update the swap slot only when it pointed
+                         ;; to the swap-ref-id
+                         (= prev-swap-slot swap-ref-id)
+                          (pcb/update-shapes
+                           [(:id prev-shape)]
+                           #(ctk/set-swap-slot % (:shape-ref current-shape)))))
 
-                      (= prev-swap-slot swap-ref-id)
+
+
+
+        #_(cond-> (pcb/empty-changes)
+            :always
+            (pcb/with-page page)
+            :always
+            (pcb/with-objects (:objects page))
+            :always
+                       ;; Temporary move the previous shape to the root panel
+            (pcb/change-parent uuid/zero
+                               [prev-shape] 0 {:component-swap true})
+
+            (= prev-swap-slot swap-ref-id)
                        ;; We need to update the swap slot only when it pointed
                        ;; to the swap-ref-id
-                      (pcb/update-shapes
-                       [(:id prev-shape)]
-                       #(ctk/set-swap-slot % (:shape-ref current-shape))))
+            (pcb/update-shapes
+             [(:id prev-shape)]
+             #(ctk/set-swap-slot % (:shape-ref current-shape))))
 
-        remove-deletion-ids (->> (cfh/get-children-with-self prev-objects (:id prev-shape))
-                                 (map :id)
-                                 set)
+
+        _ (prn "===== redo pre changes ===")
+        _ (prn (:redo-changes pre-changes))
+
+        _ (prn "===== undo pre changes ===")
+        _ (prn (:undo-changes pre-changes))
+
+        _ (prn "===== redo pre changes ===")
+        _ (prn (:redo-changes pre-changes))
+
+        _ (prn "===== undo pre changes ===")
+        _ (prn (:undo-changes pre-changes))
+
+        ;;remove-deletion-ids (->> (cfh/get-children-with-self prev-objects (:id prev-shape))
+        ;;                         (map :id)
+        ;;                         set)
 
         ;; remove the delete changes for the swapped item and its children
         ;; TODO: Maybe it makes sense to change the deletion process to don't add them
         ;; on the first place
-        redo   (remove #(and (= (:type %) :del-obj) (contains? remove-deletion-ids (:id %))) (:redo-changes changes))
-        changes (assoc changes :redo-changes redo)
+        ;;redo   (remove #(and (= (:type %) :del-obj) (contains? remove-deletion-ids (:id %))) (:redo-changes changes))
+        ;;changes (assoc changes :redo-changes redo)
+
+
+        changes (pcb/concat-changes pre-changes changes)
+        ;;changes (pcb/concat-changes-redo pre-changes changes)
+        ;;changes (pcb/concat-changes-undo changes pre-changes)
 
         ;; TODO undo-changes?
-        changes (-> (assoc changes :redo-changes (into (:redo-changes pre-changes) redo))
+        changes (-> changes
+                    #_(assoc changes :redo-changes (into (:redo-changes pre-changes) redo))
                     #_(pcb/concat-changes fake-changes changes)
+                    #_(pcb/concat-changes-redo pre-changes changes)
+                    #_(pcb/concat-changes-undo pre-changes)
                     ;; TODO Keep pos
                     (pcb/change-parent (:parent-id current-shape) [prev-shape] 0 {:component-swap true}))]
 
@@ -136,7 +177,6 @@
                                  #(child-of-swapped? %
                                                      page-objects
                                                      (:id original-shape))))
-        original-objects   (into {} (map (juxt :id identity) original-shapes))
 
         new-shapes-w-path  (add-unique-path
                             (reverse (cfh/get-children-with-self objects (:id new-shape)))
@@ -171,7 +211,7 @@
 
          (if current-shape
            (if swap-slot
-             (keep-swapped-item changes current-shape previous-shape original-objects ldata page swap-ref-id)
+             (keep-swapped-item changes current-shape previous-shape ldata page swap-ref-id)
              (cll/update-attrs-on-switch
               changes current-shape previous-shape new-shape original-shape prev-shape-ref container))
            changes)))

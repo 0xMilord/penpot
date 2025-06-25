@@ -128,12 +128,17 @@
 ;; ---- ACCESSORS
 
 (defn get-children-ids
-  [objects id]
-  (letfn [(get-children-ids-rec [id processed]
-            (when (not (contains? processed id))
-              (when-let [shapes (-> (get objects id) :shapes (some-> vec))]
-                (into shapes (mapcat #(get-children-ids-rec % (conj processed id))) shapes))))]
-    (get-children-ids-rec id #{})))
+  ([objects id]
+   (get-children-ids objects id {}))
+  ([objects id {:keys [ignore-fn] :or {ignore-fn (constantly false)}}]
+   (letfn [(get-children-ids-rec [id processed]
+             (when (not (contains? processed id))
+               (when-let [shapes (as-> (get objects id) $
+                                   (:shapes $)
+                                   (remove ignore-fn $)
+                                   (some-> $ vec))]
+                 (into shapes (mapcat #(get-children-ids-rec % (conj processed id))) shapes))))]
+     (get-children-ids-rec id #{}))))
 
 (defn get-children-ids-with-self
   [objects id]

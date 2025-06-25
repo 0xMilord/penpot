@@ -293,7 +293,8 @@
                                           :id)
                                      0
                                      nil
-                                     {})
+                                     {}
+                                     false)
 
         file' (thf/apply-changes file changes)]
     (if propagate-fn
