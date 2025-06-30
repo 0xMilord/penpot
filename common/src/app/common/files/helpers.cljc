@@ -154,9 +154,14 @@
 (defn get-children-ids
   [objects id]
   (letfn [(get-children-ids-rec [id processed]
-            (when (not (contains? processed id))
-              (when-let [shapes (-> (get objects id) :shapes (some-> vec))]
-                (into shapes (mapcat #(get-children-ids-rec % (conj processed id))) shapes))))]
+            (when-not (contains? processed id)
+              (let [shapes    (-> (get objects id)
+                                  (get :shapes)
+                                  (not-empty))
+                    processed (conj processed id)]
+                (when (some? shapes)
+                  (into (vec shapes) (mapcat #(get-children-ids-rec % processed) shapes))))))]
+
     (get-children-ids-rec id #{})))
 
 (defn get-children-ids-with-self
