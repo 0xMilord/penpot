@@ -160,8 +160,9 @@
 ;; === Token Set
 
 (defprotocol ITokenSet
+  (token-by-id [_ id] "get a token by its id")
   (add-token [_ token] "add a token at the end of the list")
-  (update-token [_ token-name f] "update a token in the list")
+  (update-token [_ id f] "update a token in the list")
   (delete-token [_ token-name] "delete a token from the list")
   (get-token [_ token-name] "return token by token-name")
   (get-tokens [_] "return an ordered sequence of all tokens in the set")
@@ -212,6 +213,10 @@
                tokens))
 
   ITokenSet
+  (token-by-id [_ id]
+    (some #(when (= (:id %) id) %) ;; TODO: this will be made in an efficient way when
+          (vals tokens)))          ;;       we refactor the tokens lib internal structure
+
   (add-token [_ token]
     (let [token (check-token token)]
       (TokenSet. id
@@ -220,8 +225,8 @@
                  (dt/now)
                  (assoc tokens (:name token) token))))
 
-  (update-token [this token-name f]
-    (if-let [token (get tokens token-name)]
+  (update-token [this id f]
+    (if-let [token (token-by-id this id)]
       (let [token' (-> (make-token (f token))
                        (assoc :modified-at (dt/now)))]
         (TokenSet. id
@@ -794,7 +799,7 @@
   (set-group-path-exists? [_ path] "if a set group at `path` exists")
   (add-token-in-set [_ set-name token] "add token to a set")
   (get-token-in-set [_ set-name token-name] "get token in a set")
-  (update-token-in-set [_ set-name token-name f] "update a token in a set")
+  (update-token-in-set [_ set-name token-id f] "update a token in a set")
   (delete-token-from-set [_ set-name token-name] "delete a token from a set")
   (toggle-set-in-theme [_ group-name theme-name set-name] "toggle a set used / not used in a theme")
   (get-active-themes-set-names [_] "set of set names that are active in the the active themes")
@@ -1147,8 +1152,8 @@ Will return a value that matches this schema:
             (get-set set-name)
             (get-token token-name)))
 
-  (update-token-in-set [this set-name token-name f]
-    (update-set this set-name #(update-token % token-name f)))
+  (update-token-in-set [this set-name token-id f]
+    (update-set this set-name #(update-token % token-id f)))
 
   (delete-token-from-set [this set-name token-name]
     (update-set this set-name #(delete-token % token-name)))
