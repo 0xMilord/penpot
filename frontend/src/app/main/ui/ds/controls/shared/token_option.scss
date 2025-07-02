@@ -82,4 +82,14 @@
 }
 .option-check {
   color: var(--token-options-icon-fg-color);
+  min-width: 16px;
+}
+
+.group-option {
+  display:flex;
+  align-items: center;
+  gap: 4px;
+  color: var(--color-foreground-secondary);
+  padding-inline: 8px;
+  height: 32px;
 }

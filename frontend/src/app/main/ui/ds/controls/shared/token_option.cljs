@@ -8,6 +8,7 @@
   (:require-macros
    [app.main.style :as stl])
   (:require
+      [app.common.data :as d]
    [app.main.ui.ds.foundations.assets.icon :refer [icon*] :as i]
    [rumext.v2 :as mf]))
 
@@ -15,38 +16,48 @@
 (def schema:token-option
   [:map {:title "token option"}
    [:id :string]
-   [:resolved [:or
-               :int
-               :string]]
-   [:label :string]])
+   [:resolved-value {:optional true}
+    [:or
+     :int
+     :string]]
+   [:name {:optional true} :string]])
 
 (mf/defc token-option*
-  [{:keys [id label on-click selected ref focused resolved] :rest props}]
-
-  [:> :li {:value id
-           :class (stl/css-case :option true
-                                :option-with-pill true
-                                :option-selected-token selected
-                                :option-current focused)
-           :aria-selected selected
-           :ref ref
-           :role "option"
-           :id id
-           :on-click on-click
-           :data-id id
-           :data-testid "dropdown-option"}
-
-   (if selected
+  [{:keys [id label name on-click selected ref focused resolved group] :rest props}]
+  (if group
+    [:li {:class (stl/css :group-option)}
      [:> icon*
-      {:icon-id i/tick
-       :size "s"
+      {:icon-id i/arrow-down
+       :size "m"
        :class (stl/css :option-check)
-       :aria-hidden (when label true)}]
-     [:span {:class (stl/css :icon-placeholder)}])
+       :aria-hidden (when name true)}]
+     (d/name label)]
+    [:> :li {:value id
+             :class (stl/css-case :option true
+                                  :option-with-pill true
+                                  :option-selected-token selected
+                                  :option-current focused)
+             :aria-selected selected
+             :ref ref
+             :role "option"
+             :id id
+             :on-click on-click
+             :data-id id
+             :data-testid "dropdown-option"}
 
-   [:span {:class (stl/css :option-text)}
-    label]
+     (if selected
+       [:> icon*
+        {:icon-id i/tick
+         :size "s"
+         :class (stl/css :option-check)
+         :aria-hidden (when name true)}]
+       [:span {:class (stl/css :icon-placeholder)}])
 
-   (when resolved
-     [:> :span {:class (stl/css :option-pill)}
-      resolved])])
+    ;;  Add tooltip for very long name
+    ;;  Add ellipsis
+     [:span {:class (stl/css :option-text)}
+      name]
+
+     (when resolved
+       [:> :span {:class (stl/css :option-pill)}
+        resolved])]))

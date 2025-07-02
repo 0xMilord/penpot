@@ -23,7 +23,9 @@
    [app.main.ui.components.dropdown :refer [dropdown]]
    [app.main.ui.components.numeric-input :refer [numeric-input*]]
    [app.main.ui.components.radio-buttons :refer [radio-button radio-buttons]]
+   [app.main.ui.context :as muc]
    [app.main.ui.ds.buttons.icon-button :refer [icon-button*]]
+   [app.main.ui.ds.controls.numeric-input :as ni]
    [app.main.ui.ds.foundations.assets.icon :as ds-i]
    [app.main.ui.hooks :as hooks]
    [app.main.ui.icons :as i]
@@ -286,7 +288,9 @@
         handle-fit-content
         (mf/use-fn
          (fn []
-           (st/emit! (dwt/selected-fit-content))))]
+           (st/emit! (dwt/selected-fit-content))))
+        
+        tokens (mf/use-ctx muc/tokens-by-type)]
 
     [:div {:class (stl/css :element-set)}
      (when (and (options :presets)
@@ -370,28 +374,37 @@
                           :aria-label (if proportion-lock (tr "workspace.options.size.unlock") (tr "workspace.options.size.lock"))
                           :on-click on-proportion-lock-change}]])
      (when (options :position)
-       [:div {:class (stl/css :position)}
-        [:div {:class (stl/css-case :x-position true
-                                    :disabled disabled-position-x?)
-               :title (tr "workspace.options.x")}
-         [:span {:class (stl/css :icon-text)} "X"]
-         [:> numeric-input* {:no-validate true
-                             :placeholder (if (= :multiple (:x values)) (tr "settings.multiple") "--")
-                             :on-change on-pos-x-change
-                             :disabled disabled-position-x?
-                             :class (stl/css :numeric-input)
-                             :value (:x values)}]]
+       (let [filtered-tokens (select-keys tokens #{:dimensions})]
+         [:div {:class (stl/css :position)}
+          [:div {:class (stl/css-case :x-position true
+                                      :disabled disabled-position-x?)
+                 :title (tr "workspace.options.x")}
+           [:span {:class (stl/css :icon-text)} "X"]
+           [:> numeric-input* {:no-validate true
+                               :placeholder (if (= :multiple (:x values)) (tr "settings.multiple") "--")
+                               :on-change on-pos-x-change
+                               :disabled disabled-position-x?
+                               :class (stl/css :numeric-input)
+                               :value (:x values)}]]
+          [:> ni/numeric-input* {:no-validate true
+                                 :placeholder (if (= :multiple (:y values)) (tr "settings.multiple") "--")
+                                 :disabled disabled-position-y?
+                                 :on-change on-pos-y-change
+                                 :icon "character-y"
+                                 :options filtered-tokens
+                                 :class (stl/css :numeric-input)
+                                 :value (:y values)}]
+          #_[:div {:class (stl/css-case :y-position true
+                                        :disabled disabled-position-y?)
+                   :title (tr "workspace.options.y")}
+             [:span {:class (stl/css :icon-text)} "Y"]
 
-        [:div {:class (stl/css-case :y-position true
-                                    :disabled disabled-position-y?)
-               :title (tr "workspace.options.y")}
-         [:span {:class (stl/css :icon-text)} "Y"]
-         [:> numeric-input* {:no-validate true
-                             :placeholder (if (= :multiple (:y values)) (tr "settings.multiple") "--")
-                             :disabled disabled-position-y?
-                             :on-change on-pos-y-change
-                             :class (stl/css :numeric-input)
-                             :value (:y values)}]]])
+             #_[:> numeric-input* {:no-validate true
+                                   :placeholder (if (= :multiple (:y values)) (tr "settings.multiple") "--")
+                                   :disabled disabled-position-y?
+                                   :on-change on-pos-y-change
+                                   :class (stl/css :numeric-input)
+                                   :value (:y values)}]]]))
      (when (or (options :rotation) (options :radius))
        [:div {:class (stl/css :rotation-radius)}
         (when (options :rotation)
