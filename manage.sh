@@ -26,7 +26,7 @@ function build-devenv {
     docker buildx inspect penpot > /dev/null 2>&1;
 
     if [ $? -eq 1 ]; then
-        docker buildx create --name=penpot --use
+        docker buildx create --name=penpot --config=/tmp/buildkitd.toml --use
         docker buildx inspect --bootstrap > /dev/null 2>&1;
     else
         docker buildx use penpot;
