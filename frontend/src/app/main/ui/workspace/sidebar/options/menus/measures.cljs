@@ -376,7 +376,7 @@
                           :aria-label (if proportion-lock (tr "workspace.options.size.unlock") (tr "workspace.options.size.lock"))
                           :on-click on-proportion-lock-change}]])
      (when (options :position)
-       (let [filtered-tokens (select-keys tokens #{:dimensions :sizing :number})]
+       (let [tokens (not-empty (select-keys tokens #{:dimensions :sizing :number}))]
          [:div {:class (stl/css :position)}
           [:div {:class (stl/css-case :x-position true
                                       :disabled disabled-position-x?)
@@ -393,7 +393,7 @@
                                  :disabled disabled-position-y?
                                  :on-change on-pos-y-change
                                  :icon "character-y"
-                                 :options filtered-tokens
+                                 :tokens tokens
                                  :token-applied (:y (:applied-tokens values))
                                  :class (stl/css :numeric-input)
                                  :value (:y values)}]

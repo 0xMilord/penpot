@@ -16,7 +16,7 @@
 ;; TODO: Review schema props
 (def schema:token-option
   [:map {:title "token option"}
-   [:id {:optiona true} ::sm/uuid]
+   [:id {:optiona true} :string]
    [:resolved-value {:optional true}
     [:or
      :int
@@ -39,18 +39,18 @@
     [:li [:hr {:class (stl/css :option-separator)}]]
 
     :else
-    [:> :li {:value id
-             :class (stl/css-case :option true
-                                  :option-with-pill true
-                                  :option-selected-token selected
-                                  :option-current focused)
-             :aria-selected selected
-             :ref ref
-             :role "option"
-             :id id
-             :on-click on-click
-             :data-id id
-             :data-testid "dropdown-option"}
+    [:li {:value id
+          :class (stl/css-case :option true
+                               :option-with-pill true
+                               :option-selected-token selected
+                               :option-current focused)
+          :aria-selected selected
+          :ref ref
+          :role "option"
+          :id id
+          :on-click on-click
+          :data-id id
+          :data-testid "dropdown-option"}
 
      (if selected
        [:> icon*
@@ -60,8 +60,8 @@
          :aria-hidden (when name true)}]
        [:span {:class (stl/css :icon-placeholder)}])
 
-    ;;  Add tooltip for very long name
-    ;;  Add ellipsis
+     ;;  Add tooltip for very long name
+     ;;  Add ellipsis
      [:span {:class (stl/css :option-text)}
       name]
 

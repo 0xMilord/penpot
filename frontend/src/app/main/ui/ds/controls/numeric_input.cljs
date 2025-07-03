@@ -81,7 +81,7 @@
   [:map
    [:id :string]
    [:label :string]
-   [:value [:or 
+   [:value [:or
             :int
             :string]]
    [:disabled {:optional true} :boolean]
@@ -99,8 +99,7 @@
            token-wrapper-ref token-detach-btn-ref
            ]}]
 
-  (let [_ (prn "carga token-field")
-        focus-wrapper
+  (let [focus-wrapper
         (mf/use-fn
          (mf/deps token-wrapper-ref disabled)
          (fn [event]
@@ -162,15 +161,27 @@
    [:on-blur {:optional true} fn?]
    [:on-focus {:optional true} fn?]])
 
-(defn group-options [grouped-options]
-  (->> grouped-options
-       (map (fn [[group-key items]]
+(defn- token->dropdown-option
+  [token]
+  {:id (str (get token :id))
+   :resolved-value (get token :resolved-value)
+   :name (get token :name)})
+
+(defn- generate-dropdown-options
+  [tokens]
+  (->> tokens
+       (map (fn [[type items]]
               (cons {:group true
-                     :name  group-key
-                     :id    (uuid/next)}
-                    items)))
+                     :name  (name type)
+                     :id    (str (uuid/next))}
+                    (map token->dropdown-option items))))
        (interpose [{:separator true}])
-       (apply concat)))
+       (apply concat)
+       ;; (vec)
+       ;; FIXME: revist this
+       (not-empty)))
+
+;; FIXME: rename options to tokens
 
 (mf/defc numeric-input*
   {::mf/forward-ref true
@@ -178,20 +189,21 @@
   [{:keys [id class value default placeholder icon disabled
            min max max-length step
            is-selected-on-focus nillable
-           options token-applied empty-to-end
+           tokens token-applied empty-to-end
            on-change on-blur on-focus] :rest props} ref]
 
   (let [;; NOTE: we use mfu/bean here for transparently handle
         ;; options provide as clojure data structures or javascript
         ;; plain objects and lists.
-        options      (group-options options)
-        options      (if (array? options)
-                       (mfu/bean options)
-                       options)
+        tokens          (if (object? tokens)
+                          (mfu/bean tokens)
+                          tokens)
 
+        options         (mf/with-memo [tokens]
+                          (generate-dropdown-options tokens))
 
         ;; Borrar
-        on-change (d/nilv on-change #(prn "on-change value" %))
+        on-change       (d/nilv on-change #(prn "on-change value" %))
 
         ;; Defautl props
         nillable        (d/nilv nillable false)
@@ -213,14 +225,12 @@
 
         is-token*          (mf/use-state (some? token-applied))
         is-token           (deref is-token*)
-        _ (prn "is-token" is-token)
 
         selected-token-id  (if token-applied
                              (:id (get-option-by-name options token-applied))
                              nil)
         selected-id*       (mf/use-state selected-token-id) ;; No viene una id, viene solo un nombre q es lo que tiene la shape
         selected-id        (deref selected-id*)
-        _ (prn "selected-id" selected-id)
 
         focused-id*        (mf/use-state nil)
         focused-id         (deref focused-id*)
@@ -251,17 +261,21 @@
         ;; Last value is used to store the last valid value
         last-value* (mf/use-ref (d/parse-double value default))
 
-        dropdown-options
-        (mf/with-memo [options filter-id]
-          (let [filter-id (str/trim (or filter-id ""))]
-            (if (seq filter-id)
-              (let [filtered (->> options
-                                  (filterv (fn [option]
-                                             (let [option-id (str/lower (get option :id ""))]
-                                               (str/includes? option-id (str/lower filter-id)))))
-                                  (not-empty))]
-                (or filtered options))
-              options)))
+        ;; dropdown-options
+        ;; (mf/with-memo [options filter-id]
+        ;;   (let [filter-id (str/trim (or filter-id ""))]
+        ;;     (if (seq filter-id)
+        ;;       (or (->> options
+        ;;                (filterv (fn [option]
+        ;;                           (let [option-id (str/lower (get option :id ""))]
+        ;;                             (str/includes? option-id (str/lower filter-id)))))
+        ;;                (not-empty))
+        ;;           options))
+                          ;;     options)))
+
+
+        dropdown-options options
+        _ (app.common.pprint/pprint dropdown-options)
 
         ;; Refs
         wrapper-ref          (mf/use-ref nil)
@@ -607,8 +621,7 @@
                               :token-detach-btn-ref token-detach-btn-ref
                               :detach-token detach-token})))
 
-        _ (prn "llega hasta la linea 607")
-        _ (.log js/console (clj->js dropdown-options))]
+        ]
 
     (mf/with-layout-effect [handle-mouse-wheel]
       (when-let [node (mf/ref-val ref)]

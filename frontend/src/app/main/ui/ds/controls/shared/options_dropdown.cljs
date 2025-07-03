@@ -18,11 +18,13 @@
   [:map
    [:ref {:optional true} fn?]
    [:on-click fn?]
+   ;; [:options [:vector schema:token-option]]
    [:options [:vector [:or
                        schema:option
                        schema:token-option]]]
+
    [:token-option {:optional true} :boolean]
-  ;;  [:selected :any]
+    ;; [:selected :any]
    [:focused {:optional true} :any]
    [:empty-to-end {:optional true} :boolean]])
 
@@ -43,12 +45,12 @@
                          {:class (stl/css :option-list)
                           :tab-index "-1"
                           :role "listbox"})
-       
+
         options-blank
         (mf/with-memo [empty-to-end options]
           (when ^boolean empty-to-end
             (into [] xf:filter-blank-id options)))
-        
+
         options
         (mf/with-memo [empty-to-end options]
           (if ^boolean empty-to-end
