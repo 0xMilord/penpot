@@ -12,7 +12,7 @@ mod surfaces;
 mod text;
 mod ui;
 
-use skia_safe::{self as skia, Matrix, Rect};
+use skia_safe::{self as skia, image_filters, Matrix, Rect, Vector};
 use std::borrow::Cow;
 use std::collections::{HashMap, HashSet};
 
@@ -776,9 +776,8 @@ impl RenderState {
         if let Type::Group(_) = element.shape_type {
             self.nested_fills.pop();
         }
-        self.surfaces.canvas(SurfaceId::Current).restore();
 
-        // TODO: detect clipping and apply it properly
+        // Detect clipping and apply it properly
         if let Type::Frame(_) = &element.shape_type {
             if element.clip() {
                 let mut layer_paint = skia::Paint::default();
@@ -805,10 +804,10 @@ impl RenderState {
                 element_strokes.to_mut().clear_shadows();
                 self.render_shape(&element_strokes, modifiers, scale_content);
 
-                // TODO: shadows & blur
+                // TODO: shadows
             }
         }
-
+        self.surfaces.canvas(SurfaceId::Current).restore();
         self.focus_mode.exit(&element.id);
     }
 
