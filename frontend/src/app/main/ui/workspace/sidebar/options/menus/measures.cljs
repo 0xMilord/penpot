@@ -386,13 +386,14 @@
                                :disabled disabled-position-x?
                                :class (stl/css :numeric-input)
                                :value (:x values)}]]
+
           [:> ni/numeric-input* {:no-validate true
                                  :placeholder (if (= :multiple (:y values)) (tr "settings.multiple") "--")
                                  :disabled disabled-position-y?
                                  :on-change on-pos-y-change
                                  :icon "character-y"
                                  :tokens tokens
-                                 :token-applied (:y (:applied-tokens values))
+                                 :applied-token (:y (:applied-tokens values))
                                  :class (stl/css :numeric-input)
                                  :value (:y values)}]
           #_[:div {:class (stl/css-case :y-position true
