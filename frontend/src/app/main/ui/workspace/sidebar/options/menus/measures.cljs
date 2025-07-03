@@ -132,8 +132,6 @@
         disabled-height-sizing? (and (or flex-child? flex-container?)
                                      (or flex-auto-height? flex-fill-height?)
                                      (not absolute?))
-        _ (prn "values" values)
-        _ (prn (:y (:applied-tokens values)))
         ;; To show interactively the measures while the user is manipulating
         ;; the shape with the mouse, generate a copy of the shapes applying
         ;; the transient transformations.

@@ -247,19 +247,19 @@
                        :else (d/parse-double value default))
 
         ;; Raw value is used to store the raw input value
-        raw-value* (mf/use-ref
-                    (cond
-                      is-multiple?
-                      ""
+        raw-value* (mf/use-ref nil)
+                    ;; (cond
+                    ;;   is-multiple?
+                    ;;   ""
 
-                      (and nillable (nil? value))
-                      ""
+                    ;;   (and nillable (nil? value))
+                    ;;   ""
 
-                      :else
-                      (fmt/format-number (d/parse-double value default))))
+                    ;;   :else
+                    ;;   (fmt/format-number (d/parse-double value default))))
 
         ;; Last value is used to store the last valid value
-        last-value* (mf/use-ref (d/parse-double value default))
+        last-value* (mf/use-ref nil) #_(d/parse-double value default)
 
         ;; dropdown-options
         ;; (mf/with-memo [options filter-id]
@@ -275,7 +275,6 @@
 
 
         dropdown-options options
-        _ (app.common.pprint/pprint dropdown-options)
 
         ;; Refs
         wrapper-ref          (mf/use-ref nil)
@@ -622,6 +621,23 @@
                               :detach-token detach-token})))
 
         ]
+
+    (mf/with-effect [value default]
+      (let [value  (d/parse-double value default)
+            value' (cond
+                     is-multiple?
+                     ""
+
+                     (and nillable (nil? value))
+                     ""
+
+                     :else
+                     (fmt/format-number (d/parse-double value default)))]
+
+        (mf/set-ref-val! raw-value* value')
+        (mf/set-ref-val! last-value* value)
+        (when-let [node (mf/ref-val ref)]
+          (dom/set-value! node value'))))
 
     (mf/with-layout-effect [handle-mouse-wheel]
       (when-let [node (mf/ref-val ref)]
