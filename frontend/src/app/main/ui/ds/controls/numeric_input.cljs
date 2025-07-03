@@ -69,13 +69,20 @@
             (d/min max-value)))
 
       :else nil)))
+;; (defn get-option
+;;   [options id]
+;;   (or (d/seek #(= id (get % :id)) options)
+;;       (nth options 0)))
+(defn get-option-by-name
+  [options name]
+  (d/seek #(= name (get % :name)) options))
 
 (def ^:private schema:token-field
   [:map
    [:id :string]
    [:label :string]
    [:value [:or 
-            :number
+            :int
             :string]]
    [:disabled {:optional true} :boolean]
    [:slot-start {:optional true} [:maybe some?]]
@@ -89,9 +96,11 @@
    ::mf/schema schema:token-field}
   [{:keys [id label value slot-start disabled
            on-click handle-pill on-blur detach-token
-           token-wrapper-ref token-detach-btn-ref]}]
+           token-wrapper-ref token-detach-btn-ref
+           ]}]
 
-  (let [focus-wrapper
+  (let [_ (prn "carga token-field")
+        focus-wrapper
         (mf/use-fn
          (mf/deps token-wrapper-ref disabled)
          (fn [event]
@@ -147,24 +156,21 @@
    [:step {:optional true} [:maybe :int]]
    [:is-selected-on-focus {:optional true} :boolean]
    [:nillable {:optional true} :boolean]
-  ;;  [:options {:optional true}
-  ;;   [:vector {:min 1}
-  ;;    schema:token-option]]
-   [:default-selected {:optional true} :string] ;; podria ser un id de token??, cambiar nombre
+   [:token-applied {:optional true} [:maybe :string]]
    [:empty-to-end {:optional true} :boolean]
    [:on-change {:optional true} fn?]
    [:on-blur {:optional true} fn?]
-   [:on-focus {:optional true} fn?]
-  ]
-   )
-(defn flatten-grouped-options [groups]
-  (reduce-kv
-   (fn [acc group-label options]
-     (let [group-id (uuid/next)
-           group-entry {:group true :label group-label :id group-id}]
-       (into acc (cons group-entry options))))
-   []
-   groups))
+   [:on-focus {:optional true} fn?]])
+
+(defn group-options [grouped-options]
+  (->> grouped-options
+       (map (fn [[group-key items]]
+              (cons {:group true
+                     :name  group-key
+                     :id    (uuid/next)}
+                    items)))
+       (interpose [{:separator true}])
+       (apply concat)))
 
 (mf/defc numeric-input*
   {::mf/forward-ref true
@@ -172,23 +178,24 @@
   [{:keys [id class value default placeholder icon disabled
            min max max-length step
            is-selected-on-focus nillable
-           options default-selected empty-to-end
+           options token-applied empty-to-end
            on-change on-blur on-focus] :rest props} ref]
 
   (let [;; NOTE: we use mfu/bean here for transparently handle
         ;; options provide as clojure data structures or javascript
         ;; plain objects and lists.
-        options      (flatten-grouped-options options)
+        options      (group-options options)
         options      (if (array? options)
                        (mfu/bean options)
                        options)
-        
-        _ (prn value)
+
+
         ;; Borrar
         on-change (d/nilv on-change #(prn "on-change value" %))
 
         ;; Defautl props
         nillable        (d/nilv nillable false)
+        disabled        (d/nilv disabled false)
         select-on-focus (d/nilv is-selected-on-focus true)
         default         (d/parse-double default (when-not nillable 0))
         step            (d/parse-double step 1)
@@ -201,14 +208,19 @@
         listbox-id      (mf/use-id)
 
         ;; State and values
-        is-open*           (mf/use-state true)
+        is-open*           (mf/use-state false)
         is-open            (deref is-open*)
 
-        is-token*          (mf/use-state (some? default-selected))
+        is-token*          (mf/use-state (some? token-applied))
         is-token           (deref is-token*)
+        _ (prn "is-token" is-token)
 
-        selected-id*       (mf/use-state default-selected)
+        selected-token-id  (if token-applied
+                             (:id (get-option-by-name options token-applied))
+                             nil)
+        selected-id*       (mf/use-state selected-token-id) ;; No viene una id, viene solo un nombre q es lo que tiene la shape
         selected-id        (deref selected-id*)
+        _ (prn "selected-id" selected-id)
 
         focused-id*        (mf/use-state nil)
         focused-id         (deref focused-id*)
@@ -288,8 +300,7 @@
         (mf/use-fn
          (mf/deps on-change update-input value nillable)
          (fn [raw-value]
-
-           (if-let [parsed (parse-value raw-value (mf/ref-val last-value*) min max nillable)]
+           (if-let [parsed (parse-value (str raw-value) (mf/ref-val last-value*) min max nillable)]
              (when-not (= parsed (mf/ref-val last-value*))
                (mf/set-ref-val! last-value* parsed)
                (reset! is-token* false)
@@ -317,6 +328,9 @@
                  (when (and (fn? on-change) (not= fallback-value value))
                    (on-change fallback-value)))))))
 
+        apply-token
+        (fn [id])
+
         store-raw-value
         (mf/use-fn
          (fn [event]
@@ -326,8 +340,8 @@
         on-blur
         (mf/use-fn
          (mf/deps apply-value)
-         (fn [e]
-           (let [target (dom/get-related-target e)
+         (fn [event]
+           (let [target (dom/get-related-target event)
                  self-node (mf/ref-val wrapper-ref)]
              (when-not (dom/is-child? self-node target)
                (reset! focused-id* nil)
@@ -336,7 +350,7 @@
              (when (mf/ref-val dirty-ref)
                (apply-value (mf/ref-val raw-value*))
                (when (fn? on-blur)
-                 (on-blur e))))))
+                 (on-blur event))))))
 
         on-token-apply
         (fn [id value]
@@ -345,6 +359,7 @@
           (reset! is-open* false)
           (apply-value value)
           ;; Hay que aplicar el token a la shape
+          (apply-token id)
           (reset! is-token* id))
 
         on-option-click
@@ -353,8 +368,8 @@
          (fn [event]
            (let [node   (dom/get-current-target event)
                  id     (dom/get-data node "id")
-                 option (get-option options id)
-                 value  (get option :resolved)]
+                 option (get-option options (uuid/uuid id))
+                 value  (get option :resolved-value)]
 
              (on-token-apply id value))))
 
@@ -362,8 +377,8 @@
         (mf/use-fn
          (mf/deps options focused-id apply-value)
          (fn [_]
-           (let [option (get-option options focused-id)
-                 value  (get option :resolved)]
+           (let [option (get-option options (uuid/uuid focused-id))
+                 value  (get option :resolved-value)]
              (on-token-apply id value))))
 
         on-blur
@@ -574,11 +589,11 @@
 
         token-props
         (when is-token
-          (let [token (get-option options is-token)
-                label (get token :label)
-                token-value (get token :resolved)]
+          (let [token (get-option options (uuid/uuid is-token))
+                label (get token :name)
+                token-value (get token :resolved-value)]
             (mf/spread-props props
-                             {:id id
+                             {:id is-token
                               :label label
                               :value token-value
                               :on-click open-dropdown-token
@@ -590,7 +605,10 @@
                               :token-wrapper-ref token-wrapper-ref
                               :on-blur on-blur
                               :token-detach-btn-ref token-detach-btn-ref
-                              :detach-token detach-token})))]
+                              :detach-token detach-token})))
+
+        _ (prn "llega hasta la linea 607")
+        _ (.log js/console (clj->js dropdown-options))]
 
     (mf/with-layout-effect [handle-mouse-wheel]
       (when-let [node (mf/ref-val ref)]

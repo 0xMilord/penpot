@@ -8,14 +8,15 @@
   (:require-macros
    [app.main.style :as stl])
   (:require
-      [app.common.data :as d]
+   [app.common.data :as d]
+   [app.common.schema :as sm]
    [app.main.ui.ds.foundations.assets.icon :refer [icon*] :as i]
    [rumext.v2 :as mf]))
 
 ;; TODO: Review schema props
 (def schema:token-option
   [:map {:title "token option"}
-   [:id :string]
+   [:id {:optiona true} ::sm/uuid]
    [:resolved-value {:optional true}
     [:or
      :int
@@ -23,15 +24,21 @@
    [:name {:optional true} :string]])
 
 (mf/defc token-option*
-  [{:keys [id label name on-click selected ref focused resolved group] :rest props}]
-  (if group
+  [{:keys [id name on-click selected ref focused resolved group separator] :rest props}]
+  (cond
+    group
     [:li {:class (stl/css :group-option)}
      [:> icon*
       {:icon-id i/arrow-down
        :size "m"
        :class (stl/css :option-check)
        :aria-hidden (when name true)}]
-     (d/name label)]
+     (d/name name)]
+
+    separator
+    [:li [:hr {:class (stl/css :option-separator)}]]
+
+    :else
     [:> :li {:value id
              :class (stl/css-case :option true
                                   :option-with-pill true

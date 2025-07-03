@@ -36,7 +36,8 @@
    [rumext.v2 :as mf]))
 
 (def measure-attrs
-  [:proportion-lock
+  [:applied-tokens
+   :proportion-lock
    :width :height
    :x :y
    :ox :oy
@@ -131,7 +132,8 @@
         disabled-height-sizing? (and (or flex-child? flex-container?)
                                      (or flex-auto-height? flex-fill-height?)
                                      (not absolute?))
-
+        _ (prn "values" values)
+        _ (prn (:y (:applied-tokens values)))
         ;; To show interactively the measures while the user is manipulating
         ;; the shape with the mouse, generate a copy of the shapes applying
         ;; the transient transformations.
@@ -289,7 +291,7 @@
         (mf/use-fn
          (fn []
            (st/emit! (dwt/selected-fit-content))))
-        
+
         tokens (mf/use-ctx muc/tokens-by-type)]
 
     [:div {:class (stl/css :element-set)}
@@ -374,7 +376,7 @@
                           :aria-label (if proportion-lock (tr "workspace.options.size.unlock") (tr "workspace.options.size.lock"))
                           :on-click on-proportion-lock-change}]])
      (when (options :position)
-       (let [filtered-tokens (select-keys tokens #{:dimensions})]
+       (let [filtered-tokens (select-keys tokens #{:dimensions :sizing :number})]
          [:div {:class (stl/css :position)}
           [:div {:class (stl/css-case :x-position true
                                       :disabled disabled-position-x?)
@@ -392,6 +394,7 @@
                                  :on-change on-pos-y-change
                                  :icon "character-y"
                                  :options filtered-tokens
+                                 :token-applied (:y (:applied-tokens values))
                                  :class (stl/css :numeric-input)
                                  :value (:y values)}]
           #_[:div {:class (stl/css-case :y-position true
