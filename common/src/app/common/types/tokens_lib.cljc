@@ -163,8 +163,8 @@
   (token-by-id [_ id] "get a token by its id")
   (add-token [_ token] "add a token at the end of the list")
   (update-token [_ id f] "update a token in the list")
-  (delete-token [_ token-name] "delete a token from the list")
-  (get-token [_ token-name] "return token by token-name")
+  (delete-token [_ id] "delete a token from the list")
+  (get-token [_ id] "return token by id")
   (get-tokens [_] "return an ordered sequence of all tokens in the set")
   (get-tokens-map [_] "return a map of tokens in the set, indexed by token-name"))
 
@@ -240,15 +240,16 @@
                          (dissoc (:name token))))))
       this))
 
-  (delete-token [_ token-name]
-    (TokenSet. id
-               name
-               description
-               (dt/now)
-               (dissoc tokens token-name)))
+  (delete-token [this id]
+    (let [token (token-by-id this id)]
+      (TokenSet. id
+                 name
+                 description
+                 (dt/now)
+                 (dissoc tokens (:name token)))))
 
-  (get-token [_ token-name]
-    (get tokens token-name))
+  (get-token [this id]
+    (token-by-id this id))
 
   (get-tokens [_]
     (vals tokens))
@@ -798,9 +799,9 @@
   (set-path-exists? [_ path] "if a set at `path` exists")
   (set-group-path-exists? [_ path] "if a set group at `path` exists")
   (add-token-in-set [_ set-name token] "add token to a set")
-  (get-token-in-set [_ set-name token-name] "get token in a set")
+  (get-token-in-set [_ set-name token-id] "get token in a set")
   (update-token-in-set [_ set-name token-id f] "update a token in a set")
-  (delete-token-from-set [_ set-name token-name] "delete a token from a set")
+  (delete-token-from-set [_ set-name token-id] "delete a token from a set")
   (toggle-set-in-theme [_ group-name theme-name set-name] "toggle a set used / not used in a theme")
   (get-active-themes-set-names [_] "set of set names that are active in the the active themes")
   (sets-at-path-all-active? [_ group-path] "compute active state for child sets at `group-path`.
@@ -1147,16 +1148,16 @@ Will return a value that matches this schema:
   (add-token-in-set [this set-name token]
     (update-set this set-name #(add-token % token)))
 
-  (get-token-in-set [this set-name token-name]
+  (get-token-in-set [this set-name token-id]
     (some-> this
             (get-set set-name)
-            (get-token token-name)))
+            (get-token token-id)))
 
   (update-token-in-set [this set-name token-id f]
     (update-set this set-name #(update-token % token-id f)))
 
-  (delete-token-from-set [this set-name token-name]
-    (update-set this set-name #(delete-token % token-name)))
+  (delete-token-from-set [this set-name token-id]
+    (update-set this set-name #(delete-token % token-id)))
 
   (toggle-set-in-theme [this theme-group theme-name set-name]
     (if-let [_theme (get-in themes theme-group theme-name)]

@@ -424,7 +424,7 @@
      [:map {:title "SetTokenChange"}
       [:type [:= :set-token]]
       [:set-name :string]
-      [:token-name :string]
+      [:token-id ::sm/uuid]
       [:token [:maybe ctob/schema:token-attrs]]]]
 
     [:set-base-font-size

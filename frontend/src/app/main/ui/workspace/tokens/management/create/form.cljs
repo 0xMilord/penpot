@@ -474,7 +474,9 @@
          (fn [e]
            (dom/prevent-default e)
            (modal/hide!)
-           (st/emit! (dwtl/delete-token (ctob/prefixed-set-path-string->set-name-string selected-token-set-name) (:name token)))))
+           (st/emit! (dwtl/delete-token
+                      (ctob/prefixed-set-path-string->set-name-string selected-token-set-name)
+                      (:id token)))))
 
         on-cancel
         (mf/use-fn
@@ -482,18 +484,21 @@
            (mf/set-ref-val! cancel-ref nil)
            (dom/prevent-default e)
            (modal/hide!)))
+
         handle-key-down-delete
         (mf/use-fn
          (mf/deps on-delete-token)
          (fn [e]
            (when (k/enter? e)
              (on-delete-token e))))
+
         handle-key-down-cancel
         (mf/use-fn
          (mf/deps on-cancel)
          (fn [e]
            (when (k/enter? e)
              (on-cancel e))))
+
         handle-key-down-save
         (mf/use-fn
          (fn [e]

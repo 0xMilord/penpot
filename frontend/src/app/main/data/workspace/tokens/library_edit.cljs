@@ -13,6 +13,7 @@
    [app.common.logic.tokens :as clt]
    [app.common.types.shape :as cts]
    [app.common.types.tokens-lib :as ctob]
+   [app.common.uuid :as uuid]
    [app.main.data.changes :as dch]
    [app.main.data.event :as ev]
    [app.main.data.helpers :as dsh]
@@ -347,9 +348,10 @@
                 changes (-> (pcb/empty-changes it)
                             (pcb/with-library-data data)
                             (pcb/set-token (ctob/get-name token-set)
-                                           (:name token)
+                                           (:id token)
                                            token))]
 
+            (js/console.log "Creating token" (clj->js changes))
             (rx/of (dch/commit-changes changes)
                    (ptk/data-event ::ev/event {::ev/name "create-token" :type token-type})))
 
@@ -372,23 +374,23 @@
             changes   (-> (pcb/empty-changes it)
                           (pcb/with-library-data data)
                           (pcb/set-token (ctob/get-name token-set)
-                                         (:name token)
+                                         (:id token)
                                          token'))]
 
         (rx/of (dch/commit-changes changes)
                (ptk/data-event ::ev/event {::ev/name "edit-token" :type token-type}))))))
 
 (defn delete-token
-  [set-name token-name]
+  [set-name token-id]
   (dm/assert! (string? set-name))
-  (dm/assert! (string? token-name))
+  (dm/assert! (uuid? token-id))
   (ptk/reify ::delete-token
     ptk/WatchEvent
     (watch [it state _]
       (let [data    (dsh/lookup-file-data state)
             changes (-> (pcb/empty-changes it)
                         (pcb/with-library-data data)
-                        (pcb/set-token set-name token-name nil))]
+                        (pcb/set-token set-name token-id nil))]
         (rx/of (dch/commit-changes changes))))))
 
 (defn duplicate-token
@@ -404,7 +406,9 @@
                 suffix (tr "workspace.tokens.duplicate-suffix")
                 copy-name (cfh/generate-unique-name token-name unames :suffix suffix)]
 
-            (rx/of (create-token (assoc token :name copy-name)))))))))
+            (rx/of (create-token (assoc token
+                                        :id (uuid/next)
+                                        :name copy-name)))))))))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;; TOKEN UI OPS
