@@ -12,7 +12,8 @@ mod surfaces;
 mod text;
 mod ui;
 
-use skia_safe::{self as skia, image_filters, Matrix, Rect, Vector};
+use skia_safe::{self as skia, image_filters, Matrix, RRect, Rect, Vector};
+use std::any::Any;
 use std::borrow::Cow;
 use std::collections::{HashMap, HashSet};
 
@@ -342,11 +343,18 @@ impl RenderState {
             Some(&skia::Paint::default()),
         );
 
+        // println!("apply_drawing_to_render_canvas fills");
+        // debug::console_debug_surface(self, SurfaceId::Fills);
+
         self.surfaces.draw_into(
             SurfaceId::Fills,
             SurfaceId::Current,
             Some(&skia::Paint::default()),
         );
+
+        // println!("apply_drawing_to_render_canvas current");
+        // self.surfaces.flush_and_submit(&mut self.gpu_state, SurfaceId::Current);
+        // debug::console_debug_surface(self, SurfaceId::Current);
 
         let mut render_overlay_below_strokes = false;
         if let Some(shape) = shape {
@@ -374,6 +382,7 @@ impl RenderState {
                 Some(&skia::Paint::default()),
             );
         }
+
         let surface_ids = SurfaceId::Strokes as u32
             | SurfaceId::Fills as u32
             | SurfaceId::DropShadows as u32
@@ -397,6 +406,7 @@ impl RenderState {
         shape: &Shape,
         modifiers: Option<&Matrix>,
         scale_content: Option<&f32>,
+        clip_bounds: Option<(Rect, Option<Corners>, Matrix)>,
     ) {
         let shape = if let Some(scale_content) = scale_content {
             &shape.scale_content(*scale_content)
@@ -404,10 +414,13 @@ impl RenderState {
             shape
         };
 
+        // println!("render shape {:?} {:?}", shape.id, clip_bounds);
+
         let surface_ids = SurfaceId::Strokes as u32
             | SurfaceId::Fills as u32
             | SurfaceId::DropShadows as u32
-            | SurfaceId::InnerShadows as u32;
+            | SurfaceId::InnerShadows as u32
+            | SurfaceId::Current as u32;
         self.surfaces.apply_mut(surface_ids, |s| {
             s.canvas().save();
         });
@@ -425,6 +438,13 @@ impl RenderState {
         let mut matrix = shape.transform;
         matrix.post_translate(center);
         matrix.pre_translate(-center);
+
+        // 1. Crear un save_layer para capturar la forma (MAGENTA)
+        let base_layer_paint = skia::Paint::default();
+        let base_layer = skia::canvas::SaveLayerRec::default().paint(&base_layer_paint);
+        self.surfaces.apply_mut(surface_ids, |s| {
+            s.canvas().save_layer(&base_layer);
+        });
 
         match &shape.shape_type {
             Type::SVGRaw(sr) => {
@@ -450,10 +470,6 @@ impl RenderState {
             }
 
             Type::Text(text_content) => {
-                let surface_ids = SurfaceId::Strokes as u32
-                    | SurfaceId::Fills as u32
-                    | SurfaceId::DropShadows as u32
-                    | SurfaceId::InnerShadows as u32;
                 self.surfaces.apply_mut(surface_ids, |s| {
                     s.canvas().concat(&matrix);
                 });
@@ -492,14 +508,11 @@ impl RenderState {
                 shadows::render_text_inner_shadows(self, &shape, &paragraphs, antialias);
             }
             _ => {
-                let surface_ids = SurfaceId::Strokes as u32
-                    | SurfaceId::Fills as u32
-                    | SurfaceId::DropShadows as u32
-                    | SurfaceId::InnerShadows as u32;
                 self.surfaces.apply_mut(surface_ids, |s| {
                     s.canvas().concat(&matrix);
                 });
 
+                // 2. Dibujar la forma MAGENTA dentro del layer
                 let has_fill_none = matches!(
                     shape.svg_attrs.get("fill").map(String::as_str),
                     Some("none")
@@ -531,14 +544,87 @@ impl RenderState {
                 shadows::render_fill_drop_shadows(self, &shape, antialias);
             }
         };
-        self.apply_drawing_to_render_canvas(Some(&shape));
-        let surface_ids = SurfaceId::Strokes as u32
-            | SurfaceId::Fills as u32
-            | SurfaceId::DropShadows as u32
-            | SurfaceId::InnerShadows as u32;
+
+        // 3. Crear un segundo layer con blend_mode = DstIn para aplicar la máscara
+        // if let Some((bounds, corners, _transform)) = clip_bounds {
+        //     let mut mask_layer_paint = skia::Paint::default();
+        //     mask_layer_paint.set_blend_mode(skia::BlendMode::DstIn);
+
+        //     let mask_layer = skia::canvas::SaveLayerRec::default().paint(&mask_layer_paint);
+        //     self.surfaces.apply_mut(surface_ids, |s| {
+        //         s.canvas().save_layer(&mask_layer);
+        //     });
+
+        //     // Dibujar la máscara blanca opaca
+        //     let mut mask_paint = skia::Paint::default();
+        //     mask_paint.set_color(skia::Color::WHITE);
+        //     if let Some(corners) = corners {
+        //         let rrect = RRect::new_rect_radii(bounds, &corners);
+        //         self.surfaces.apply_mut(surface_ids, |s| {
+        //             s.canvas().draw_rrect(rrect, &skia::Paint::default());
+        //         });
+        //     } else {
+        //         self.surfaces.apply_mut(surface_ids, |s| {
+        //             s.canvas().draw_rect(bounds, &skia::Paint::default());
+        //         });
+        //     }                    
+
+        //     // Cerrar layer de máscara (aplica el DstIn al contenido del layer anterior)
+        //     self.surfaces.apply_mut(surface_ids, |s| {
+        //         s.canvas().restore();
+        //     });
+        // }
+
+        // 4. Cerrar el layer base (el contenido ya fue modificado por DstIn)
         self.surfaces.apply_mut(surface_ids, |s| {
             s.canvas().restore();
         });
+
+        self.surfaces.canvas(SurfaceId::Current).save_layer(&skia::canvas::SaveLayerRec::default());
+        debug::console_debug_surface(self, SurfaceId::Fills);
+        self.apply_drawing_to_render_canvas(Some(&shape));
+        self.surfaces.canvas(SurfaceId::Current).restore();
+
+        // debug::console_debug_surface(self, SurfaceId::Fills);
+
+        println!("1 {:?}", self.surfaces.canvas(SurfaceId::Current).local_to_device());
+        println!("2 {:?}", self.surfaces.canvas(SurfaceId::Fills).local_to_device());
+
+        if let Some((bounds, corners, transform)) = clip_bounds {
+            let source_matrix = self.surfaces.canvas(SurfaceId::Fills).local_to_device();
+            let original_matrix =  self.surfaces.canvas(SurfaceId::Current).local_to_device();
+            self.surfaces.canvas(SurfaceId::Current).set_matrix(&source_matrix);
+
+            let mut mask_layer_paint = skia::Paint::default();
+            mask_layer_paint.set_blend_mode(skia::BlendMode::DstIn);
+
+            let mask_layer = skia::canvas::SaveLayerRec::default().paint(&mask_layer_paint);
+            self.surfaces.canvas(SurfaceId::Current).save_layer(&mask_layer);
+
+            // Dibujar la máscara blanca opaca
+            let mut mask_paint = skia::Paint::default();
+            mask_paint.set_color(skia::Color::WHITE);
+            if let Some(corners) = corners {
+                let rrect = RRect::new_rect_radii(bounds, &corners);
+                self.surfaces.apply_mut(surface_ids, |s| {
+                    s.canvas().draw_rrect(rrect, &skia::Paint::default());
+                });
+            } else {
+                self.surfaces.apply_mut(surface_ids, |s| {
+                    s.canvas().draw_rect(bounds, &skia::Paint::default());
+                });
+            }                    
+
+            // Cerrar layer de máscara (aplica el DstIn al contenido del layer anterior)
+            self.surfaces.canvas(SurfaceId::Current).restore();
+            self.surfaces.canvas(SurfaceId::Current).set_matrix(&original_matrix);
+        }
+
+
+        self.surfaces.apply_mut(surface_ids, |s| {
+            s.canvas().restore();
+        });
+
     }
 
     pub fn update_render_context(&mut self, tile: tiles::Tile) {
@@ -778,35 +864,35 @@ impl RenderState {
         }
 
         // Detect clipping and apply it properly
-        if let Type::Frame(_) = &element.shape_type {
-            if element.clip() {
-                let mut layer_paint = skia::Paint::default();
-                layer_paint.set_blend_mode(skia::BlendMode::DstIn);
-                let layer_rec = skia::canvas::SaveLayerRec::default().paint(&layer_paint);
-                self.surfaces
-                    .canvas(SurfaceId::Current)
-                    .save_layer(&layer_rec);
+        // if let Type::Frame(_) = &element.shape_type {
+        //     if element.clip() {
+        //         let mut layer_paint = skia::Paint::default();
+        //         layer_paint.set_blend_mode(skia::BlendMode::DstIn);
+        //         let layer_rec = skia::canvas::SaveLayerRec::default().paint(&layer_paint);
+        //         self.surfaces
+        //             .canvas(SurfaceId::Current)
+        //             .save_layer(&layer_rec);
 
-                // We clip only the fills content
-                let mut element_fills: Cow<Shape> = Cow::Borrowed(element);
-                element_fills.to_mut().clear_strokes();
-                element_fills.to_mut().clear_shadows();
-                element_fills
-                    .to_mut()
-                    .set_fills([Fill::Solid(SolidColor(self.background_color))].to_vec());
-                self.render_shape(&element_fills, modifiers, scale_content);
+        //         // We clip only the fills content
+        //         let mut element_fills: Cow<Shape> = Cow::Borrowed(element);
+        //         element_fills.to_mut().clear_strokes();
+        //         element_fills.to_mut().clear_shadows();
+        //         element_fills
+        //             .to_mut()
+        //             .set_fills([Fill::Solid(SolidColor(self.background_color))].to_vec());
+        //         self.render_shape(&element_fills, modifiers, scale_content, None);
 
-                self.surfaces.canvas(SurfaceId::Current).restore();
+        //         self.surfaces.canvas(SurfaceId::Current).restore();
 
-                // Now we paint the strokes - in clipped content strokes are over the contained elements
-                let mut element_strokes: Cow<Shape> = Cow::Borrowed(element);
-                element_strokes.to_mut().clear_fills();
-                element_strokes.to_mut().clear_shadows();
-                self.render_shape(&element_strokes, modifiers, scale_content);
+        //         // Now we paint the strokes - in clipped content strokes are over the contained elements
+        //         let mut element_strokes: Cow<Shape> = Cow::Borrowed(element);
+        //         element_strokes.to_mut().clear_fills();
+        //         element_strokes.to_mut().clear_shadows();
+        //         self.render_shape(&element_strokes, modifiers, scale_content, None);
 
-                // TODO: shadows
-            }
-        }
+        //         // TODO: shadows
+        //     }
+        // }
         self.surfaces.canvas(SurfaceId::Current).restore();
         self.focus_mode.exit(&element.id);
     }
@@ -861,7 +947,7 @@ impl RenderState {
             let NodeRenderState {
                 id: node_id,
                 visited_children,
-                clip_bounds: _,
+                clip_bounds,
                 visited_mask,
                 mask,
             } = node_render_state;
@@ -914,6 +1000,7 @@ impl RenderState {
                     element,
                     modifiers.get(&element.id),
                     scale_content.get(&element.id),
+                    clip_bounds,
                 );
             } else if visited_children {
                 self.apply_drawing_to_render_canvas(Some(element));
