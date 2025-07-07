@@ -37,10 +37,9 @@
   (remove #(str/blank? (get % :id))))
 
 (mf/defc options-dropdown*
-  {::mf/schema schema:options-dropdown}
+  ;; {::mf/schema schema:options-dropdown}
   [{:keys [ref on-click options selected focused empty-to-end token-option] :rest props}]
-  (let [_ (prn "carga options-dropdown")
-        props
+  (let [props
         (mf/spread-props props
                          {:class (stl/css :option-list)
                           :tab-index "-1"
@@ -66,8 +65,7 @@
              name       (get option :name)
              group      (get option :group)
              resolved-value (get option :resolved-value)
-             separator (get option :separator)
-             _ (prn "selected" selected)]
+             separator (get option :separator)]
          (if token-option
            [:> token-option* {:selected (= id selected)
                               :key (or id (uuid/next))

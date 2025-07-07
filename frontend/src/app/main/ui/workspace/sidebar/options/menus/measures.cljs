@@ -16,6 +16,7 @@
    [app.main.data.workspace :as udw]
    [app.main.data.workspace.interactions :as dwi]
    [app.main.data.workspace.shapes :as dwsh]
+   [app.main.data.workspace.tokens.application :as dwta]
    [app.main.data.workspace.transforms :as dwt]
    [app.main.data.workspace.undo :as dwu]
    [app.main.refs :as refs]
@@ -242,12 +243,20 @@
         (mf/use-fn
          (mf/deps ids)
          (fn [value attr]
-           (st/emit! (udw/trigger-bounding-box-cloaking ids))
-           (binding [cts/*wasm-sync* true]
-             (run! #(do-position-change %1 value attr) shapes))))
+           (if (or (string? value) (int? value))
+             (do (st/emit! (udw/trigger-bounding-box-cloaking ids))
+                 (binding [cts/*wasm-sync* true]
+                   (run! #(do-position-change %1 value attr) shapes)))
+             (do
+               (let [value2 (:resolved-value value)]
+                 (st/emit! (udw/trigger-bounding-box-cloaking ids)
+                           (dwta/toggle-token {:token value
+                                               :attrs #{attr}
+                                               :shapes shapes}))
+                 (binding [cts/*wasm-sync* true]
+                   (run! #(do-position-change %1 value2 attr) shapes)))))))
 
         ;; ROTATION
-
         on-rotation-change
         (mf/use-fn
          (mf/deps ids)
@@ -259,7 +268,19 @@
         on-width-change #(on-size-change % :width)
         on-height-change #(on-size-change % :height)
         on-pos-x-change #(on-position-change % :x)
-        on-pos-y-change #(on-position-change % :y)
+        on-pos-y-change (fn [value] (on-position-change value :y))
+
+        detach-token 
+        (mf/use-fn
+         (mf/deps ids)
+         (fn [token attr]
+           (prn "on-detach-token" token)
+           (prn attr)
+           (let [shape-ids (map :id shapes)]
+             (st/emit! (dwta/unapply-token {:attributes #{attr}
+                                            :token token
+                                            :shape-ids shape-ids})))))
+        on-detach-y #(detach-token % :y)
 
         ;; CLIP CONTENT AND SHOW IN VIEWER
         on-change-clip-content
@@ -374,7 +395,7 @@
                           :aria-label (if proportion-lock (tr "workspace.options.size.unlock") (tr "workspace.options.size.lock"))
                           :on-click on-proportion-lock-change}]])
      (when (options :position)
-       (let [tokens (not-empty (select-keys tokens #{:dimensions :sizing :number}))]
+       (let [tokens (not-empty (select-keys tokens #{:dimensions}))]
          [:div {:class (stl/css :position)}
           [:div {:class (stl/css-case :x-position true
                                       :disabled disabled-position-x?)
@@ -391,6 +412,7 @@
                                  :placeholder (if (= :multiple (:y values)) (tr "settings.multiple") "--")
                                  :disabled disabled-position-y?
                                  :on-change on-pos-y-change
+                                 :on-detach on-detach-y
                                  :icon "character-y"
                                  :tokens tokens
                                  :applied-token (:y (:applied-tokens values))

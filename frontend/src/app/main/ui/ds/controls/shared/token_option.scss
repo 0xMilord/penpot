@@ -12,7 +12,7 @@
   --token-options-fg-color: var(--color-foreground-primary);
   --token-options-bg-color: unset;
   --token-options-empty: var(--color-canvas);
-
+  @include use-typography("body-small");
   display: grid;
   align-items: center;
   justify-items: start;
@@ -80,12 +80,14 @@
 .icon-placeholder {
   inline-size: var(--sp-l);
 }
+
 .option-check {
   color: var(--token-options-icon-fg-color);
   min-width: 16px;
 }
 
 .group-option {
+    @include use-typography("body-small");
   display:flex;
   align-items: center;
   gap: 4px;

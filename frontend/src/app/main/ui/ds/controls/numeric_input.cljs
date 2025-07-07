@@ -69,13 +69,15 @@
             (d/min max-value)))
 
       :else nil)))
-;; (defn get-option
-;;   [options id]
-;;   (or (d/seek #(= id (get % :id)) options)
-;;       (nth options 0)))
 (defn get-option-by-name
   [options name]
   (d/seek #(= name (get % :name)) options))
+
+(defn get-token-op [tokens name]
+  (->> tokens
+       vals
+       (apply concat)
+       (some #(when (= (:name %) name) %))))
 
 (def ^:private schema:token-field
   [:map
@@ -94,11 +96,7 @@
    ::mf/schema schema:token-field}
   [{:keys [id label value slot-start disabled
            on-click handle-pill on-blur detach-token
-           token-wrapper-ref token-detach-btn-ref
-           ]}]
-
-  (prn "token-field*" id label value)
-
+           token-wrapper-ref token-detach-btn-ref]}]
   (let [focus-wrapper
         (mf/use-fn
          (mf/deps token-wrapper-ref disabled)
@@ -181,20 +179,14 @@
        ;; FIXME: revist this
        (not-empty)))
 
-;; FIXME: rename options to tokens
-
 (mf/defc numeric-input*
   {::mf/forward-ref true
-   ::mf/schema schema:numeric-input
-   }
+   ::mf/schema schema:numeric-input}
   [{:keys [id class value default placeholder icon disabled
            min max max-length step
            is-selected-on-focus nillable
            tokens applied-token empty-to-end
-           on-change on-blur on-focus] :rest props} ref]
-
-  (prn "numeric-input*" "value" value)
-  (prn "numeric-input*" "applied-token" (some? applied-token))
+           on-change on-blur on-focus on-detach] :rest props} ref]
   (let [;; NOTE: we use mfu/bean here for transparently handle
         ;; options provide as clojure data structures or javascript
         ;; plain objects and lists.
@@ -204,9 +196,6 @@
 
         options         (mf/with-memo [tokens]
                           (generate-dropdown-options tokens))
-
-        ;; Borrar
-        on-change       (d/nilv on-change #(prn "on-change value" %))
 
         ;; Defautl props
         nillable        (d/nilv nillable false)
@@ -228,15 +217,14 @@
 
         is-token*          (mf/use-state applied-token)
         is-token           (deref is-token*)
+        token-name         (mf/use-ref applied-token)
 
         selected-token-id  (if applied-token
                              (:id (get-option-by-name options applied-token))
                              nil)
 
-        selected-id*       (mf/use-state selected-token-id) ;; No viene una id, viene solo un nombre q es lo que tiene la shape
+        selected-id*       (mf/use-state selected-token-id)
         selected-id        (deref selected-id*)
-
-        _         (prn "_____" applied-token)
 
         focused-id*        (mf/use-state nil)
         focused-id         (deref focused-id*)
@@ -254,15 +242,6 @@
 
         ;; Raw value is used to store the raw input value
         raw-value* (mf/use-ref nil)
-                    ;; (cond
-                    ;;   is-multiple?
-                    ;;   ""
-
-                    ;;   (and nillable (nil? value))
-                    ;;   ""
-
-                    ;;   :else
-                    ;;   (fmt/format-number (d/parse-double value default))))
 
         ;; Last value is used to store the last valid value
         last-value* (mf/use-ref nil) #_(d/parse-double value default)
@@ -278,7 +257,6 @@
         ;;                (not-empty))
         ;;           options))
                           ;;     options)))
-
 
         dropdown-options options
 
@@ -323,6 +301,7 @@
              (when-not (= parsed (mf/ref-val last-value*))
                (mf/set-ref-val! last-value* parsed)
                (reset! is-token* nil)
+               (mf/set-ref-val! token-name nil)
                (when (fn? on-change)
                  (on-change parsed))
 
@@ -335,6 +314,7 @@
                  (mf/set-ref-val! last-value* nil)
                  (mf/set-ref-val! raw-value* "")
                  (reset! is-token* nil)
+                 (mf/set-ref-val! token-name nil)
                  (update-input "")
                  (when (fn? on-change)
                    (on-change nil)))
@@ -343,12 +323,19 @@
                  (mf/set-ref-val! raw-value* fallback-value)
                  (mf/set-ref-val!  last-value* fallback-value)
                  (reset! is-token* nil)
+                 (mf/set-ref-val! token-name nil)
                  (update-input (fmt/format-number fallback-value))
                  (when (and (fn? on-change) (not= fallback-value value))
                    (on-change fallback-value)))))))
 
         apply-token
-        (fn [id])
+        (fn [value name]
+          (let [parsed (parse-value (str value) (mf/ref-val last-value*) min max nillable)
+                token-token (get-token-op tokens name)]
+                (when-not (= parsed (mf/ref-val last-value*))
+                  (mf/set-ref-val! last-value* parsed)
+                  (when (fn? on-change)
+                    (on-change token-token)))))
 
         store-raw-value
         (mf/use-fn
@@ -376,10 +363,9 @@
           (reset! selected-id* id)
           (reset! focused-id* nil)
           (reset! is-open* false)
-          (apply-value value)
-          ;; Hay que aplicar el token a la shape
-          (apply-token id)
-          (reset! is-token* name))
+          (apply-token value name)
+          (reset! is-token* name)
+          (mf/set-ref-val! token-name name))
 
         on-option-click
         (mf/use-fn
@@ -387,7 +373,7 @@
          (fn [event]
            (let [node   (dom/get-current-target event)
                  id     (dom/get-data node "id")
-                 option (get-option options (uuid/uuid id))
+                 option (get-option options id) 
                  value  (get option :resolved-value)
                  name   (get option :name)]
 
@@ -397,7 +383,7 @@
         (mf/use-fn
          (mf/deps options focused-id apply-value)
          (fn [_]
-           (let [option (get-option options (uuid/uuid focused-id))
+           (let [option (get-option options focused-id)
                  value  (get option :resolved-value)
                  name   (get option :name)]
              (on-token-apply id value name))))
@@ -520,18 +506,21 @@
 
         detach-token
         (mf/use-fn
-         (mf/deps on-change)
+         (mf/deps on-detach)
          (fn [event]
-           (when-not disabled
-             (dom/prevent-default event)
-             (dom/stop-propagation event)
-             (reset! is-token* nil)
-             (reset! selected-id* nil)
-             (reset! focused-id* nil)
-             (dom/focus! (mf/ref-val ref)))))
+           (let [token-token (get-token-op tokens is-token)]
+             (when-not disabled
+               (dom/prevent-default event)
+               (dom/stop-propagation event)
+               (on-detach token-token)
+               (reset! is-token* nil)
+               (mf/set-ref-val! token-name nil)
+               (reset! selected-id* nil)
+               (reset! focused-id* nil)
+               (dom/focus! (mf/ref-val ref))))))
 
 
-        ;; Change this name for something more descriptive (on-tolken-key-down)
+        ;; Change this name for something more descriptive (on-token-key-down)
         handle-pill
         (mf/use-fn
          (mf/deps detach-token)
@@ -600,7 +589,7 @@
                                 :slot-end (when-not disabled
                                             (when (some? options)
                                               (mf/html [:> icon-button* {:variant "action"
-                                                                         :icon "component"
+                                                                         :icon "tokens"
                                                                          :class (stl/css :invisible-button)
                                                                          ;; TODO: add translation
                                                                          :aria-label "Open dropdown"
@@ -611,10 +600,11 @@
         token-props
         (when is-token
           (let [token (get-option-by-name options is-token)
+                id (get token :id)
                 label (get token :name)
                 token-value (get token :resolved-value)]
             (mf/spread-props props
-                             {:id is-token
+                             {:id id
                               :label label
                               :value token-value
                               :on-click open-dropdown-token
@@ -626,11 +616,9 @@
                               :token-wrapper-ref token-wrapper-ref
                               :on-blur on-blur
                               :token-detach-btn-ref token-detach-btn-ref
-                              :detach-token detach-token})))
+                              :detach-token detach-token})))]
 
-        ]
-
-    (mf/with-effect [value default]
+    (mf/with-effect [value default applied-token]
       (let [value  (d/parse-double value default)
             value' (cond
                      is-multiple?
@@ -644,6 +632,14 @@
 
         (mf/set-ref-val! raw-value* value')
         (mf/set-ref-val! last-value* value)
+        (reset! is-token* applied-token)
+        (if applied-token
+          (let [token-id (:id (get-option-by-name options applied-token))]
+            (reset! selected-id* token-id))
+
+          (reset! selected-id* nil))
+        (mf/set-ref-val! token-name applied-token)
+
         (when-let [node (mf/ref-val ref)]
           (dom/set-value! node value'))))
 
