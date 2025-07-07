@@ -79,6 +79,11 @@
        (apply concat)
        (some #(when (= (:name %) name) %))))
 
+(defn clean-token-name [s]
+  (some-> s
+          (str/replace #"^\{" "")
+          (str/replace #"\}$" "")))
+
 (def ^:private schema:token-field
   [:map
    [:id :string]
@@ -179,6 +184,24 @@
        ;; FIXME: revist this
        (not-empty)))
 
+
+;; Filtrado
+
+(defn extract-partial-brace-text [s]
+  (when-let [start (str/last-index-of s "{")]
+    (subs s (inc start))))
+
+(defn filter-options [partial-text options]
+  (let [lower (str/lower partial-text)]
+    (filterv #(str/includes? (str/lower (:name %)) lower) options)))
+
+(defn update-filtered-options [user-text options]
+  (if (and (str/includes? user-text "{")
+           (not (str/includes? user-text "}")))
+    (let [partial (extract-partial-brace-text user-text)]
+      (filter-options partial options))
+    []))
+
 (mf/defc numeric-input*
   {::mf/forward-ref true
    ::mf/schema schema:numeric-input}
@@ -246,19 +269,13 @@
         ;; Last value is used to store the last valid value
         last-value* (mf/use-ref nil) #_(d/parse-double value default)
 
-        ;; dropdown-options
-        ;; (mf/with-memo [options filter-id]
-        ;;   (let [filter-id (str/trim (or filter-id ""))]
-        ;;     (if (seq filter-id)
-        ;;       (or (->> options
-        ;;                (filterv (fn [option]
-        ;;                           (let [option-id (str/lower (get option :id ""))]
-        ;;                             (str/includes? option-id (str/lower filter-id)))))
-        ;;                (not-empty))
-        ;;           options))
-                          ;;     options)))
 
-        dropdown-options options
+        dropdown-options
+        (mf/with-memo [options filter-id]
+          (let [filter-id (str/trim (or filter-id ""))]
+            (if (seq filter-id)
+              (update-filtered-options filter-id options)
+              options)))
 
         ;; Refs
         wrapper-ref          (mf/use-ref nil)
@@ -332,16 +349,18 @@
         (fn [value name]
           (let [parsed (parse-value (str value) (mf/ref-val last-value*) min max nillable)
                 token-token (get-token-op tokens name)]
-                (when-not (= parsed (mf/ref-val last-value*))
-                  (mf/set-ref-val! last-value* parsed)
-                  (when (fn? on-change)
-                    (on-change token-token)))))
+            (when-not (= parsed (mf/ref-val last-value*))
+              (mf/set-ref-val! last-value* parsed)
+              (when (fn? on-change)
+                (on-change token-token)))))
 
         store-raw-value
         (mf/use-fn
          (fn [event]
            (let [text (dom/get-target-val event)]
-             (mf/set-ref-val! raw-value* text))))
+             (mf/set-ref-val! raw-value* text)
+             (prn text)
+             (reset! filter-id* text))))
 
         on-blur
         (mf/use-fn
@@ -373,7 +392,7 @@
          (fn [event]
            (let [node   (dom/get-current-target event)
                  id     (dom/get-data node "id")
-                 option (get-option options id) 
+                 option (get-option options id)
                  value  (get option :resolved-value)
                  name   (get option :name)]
 
@@ -413,6 +432,7 @@
                  esc?    (kbd/esc? event)
                  node    (mf/ref-val ref)
                  tokens? (= (.-key event) "{")
+                 close-tokens (= (.-key event) "}")
                  parsed  (parse-value (mf/ref-val raw-value*) (mf/ref-val last-value*) min max nillable)
                  current-value (or parsed default)
                  options (mf/ref-val options-ref)
@@ -423,6 +443,14 @@
              (cond
                (and (some? options) tokens?)
                (reset! is-open* true)
+
+               close-tokens
+               (do
+                 (let [name  (clean-token-name (mf/ref-val raw-value*))
+                       token (get-option-by-name options name)]
+                   (if token
+                     (apply-token (:resolved-value token) name)
+                     (apply-value (mf/ref-val last-value*)))))
 
                enter?
                (if is-open
@@ -488,12 +516,13 @@
                  (dom/prevent-default event)
                  (dom/stop-propagation event)
                  (apply-value (dm/str new-val)))))))
+        
 
         open-dropdown
         (mf/use-fn
          (fn [event]
            (dom/prevent-default event)
-           (reset! is-open* true)
+           (swap! is-open* not)
            (dom/focus! (mf/ref-val ref))))
 
         open-dropdown-token
@@ -501,13 +530,14 @@
          (fn [event]
            (when-not disabled
              (dom/prevent-default event)
-             (reset! is-open* true)
+             (swap! is-open* not)
              (dom/focus! (mf/ref-val token-wrapper-ref)))))
 
         detach-token
         (mf/use-fn
          (mf/deps on-detach)
          (fn [event]
+          ;;  This is not working fine
            (let [token-token (get-token-op tokens is-token)]
              (when-not disabled
                (dom/prevent-default event)
@@ -584,7 +614,7 @@
                                 :disabled disabled
                                 :slot-start (when icon
                                               (mf/html [:> icon* {:icon-id icon
-                                                                  :size "s"
+                                                                  ;; :size "s"
                                                                   :class (stl/css :icon)}]))
                                 :slot-end (when-not disabled
                                             (when (some? options)

@@ -12,6 +12,7 @@
    [app.common.logic.shapes :as cls]
    [app.common.types.shape :as cts]
    [app.common.types.shape.layout :as ctl]
+   [app.common.types.token :as tk]
    [app.main.constants :refer [size-presets]]
    [app.main.data.workspace :as udw]
    [app.main.data.workspace.interactions :as dwi]
@@ -276,6 +277,8 @@
          (fn [token attr]
            (prn "on-detach-token" token)
            (prn attr)
+          ;;  Review this, detach is having problems
+           
            (let [shape-ids (map :id shapes)]
              (st/emit! (dwta/unapply-token {:attributes #{attr}
                                             :token token
@@ -395,7 +398,10 @@
                           :aria-label (if proportion-lock (tr "workspace.options.size.unlock") (tr "workspace.options.size.lock"))
                           :on-click on-proportion-lock-change}]])
      (when (options :position)
-       (let [tokens (not-empty (select-keys tokens #{:dimensions}))]
+       (let [tokens (not-empty (select-keys tokens (:y tk/tokens-by-input)))
+             
+             _ (prn "values" values)
+             _ (prn "applied-tokens" (:applied-tokens values) )]
          [:div {:class (stl/css :position)}
           [:div {:class (stl/css-case :x-position true
                                       :disabled disabled-position-x?)
@@ -409,7 +415,9 @@
                                :value (:x values)}]]
 
           [:> ni/numeric-input* {:no-validate true
-                                 :placeholder (if (= :multiple (:y values)) (tr "settings.multiple") "--")
+                                 :placeholder (if (or (= :multiple (:applied-tokens values))
+                                                      (= :multiple (:y values)))
+                                                (tr "settings.multiple") "--")
                                  :disabled disabled-position-y?
                                  :on-change on-pos-y-change
                                  :on-detach on-detach-y
