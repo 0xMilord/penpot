@@ -50,7 +50,9 @@ impl Path {
                     None
                 }
             };
+
             if let (Some(start), Some(destination)) = (start, destination) {
+                // FIXME: Equality can be a problem here
                 if destination == start {
                     skia_path.close();
                     open = false;
@@ -69,11 +71,19 @@ impl Path {
         self.skia_path.snapshot()
     }
 
+    pub fn contains(&self, p: skia::Point) -> bool {
+        self.skia_path.contains(p)
+    }
+
     pub fn is_open(&self) -> bool {
         self.open
     }
 
     pub fn transform(&mut self, mtx: &Matrix) {
         self.skia_path.transform(mtx);
+    }
+
+    pub fn segments(&self) -> &Vec<Segment> {
+        &self.segments
     }
 }

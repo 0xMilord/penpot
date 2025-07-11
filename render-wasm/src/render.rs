@@ -21,16 +21,21 @@ use options::RenderOptions;
 use surfaces::{SurfaceId, Surfaces};
 
 use crate::performance;
-use crate::shapes::{Corners, Fill, Shape, SolidColor, StructureEntry, Type};
+use crate::shapes::{Corners, Fill, Shape, SolidColor, StructureEntry, Type, Bool, BoolType};
 use crate::state::ShapesPool;
 use crate::tiles::{self, PendingTiles, TileRect};
 use crate::uuid::Uuid;
 use crate::view::Viewbox;
 use crate::wapi;
 
+use crate::math::bools;
+
 pub use blend::BlendMode;
 pub use fonts::*;
 pub use images::*;
+
+use crate::math::bools::BezierExt;
+// use bezier_rs::Bezier;
 
 // This is the extra are used for tile rendering.
 const VIEWPORT_INTEREST_AREA_THRESHOLD: i32 = 1;
@@ -395,8 +400,10 @@ impl RenderState {
 
     pub fn render_shape(
         &mut self,
+        shapes: &ShapesPool,
+        modifiers: &HashMap<Uuid, Matrix>,
+        structure: &HashMap<Uuid, Vec<StructureEntry>>,
         shape: &Shape,
-        modifiers: Option<&Matrix>,
         scale_content: Option<&f32>,
     ) {
         let shape = if let Some(scale_content) = scale_content {
@@ -418,8 +425,8 @@ impl RenderState {
         // We don't want to change the value in the global state
         let mut shape: Cow<Shape> = Cow::Borrowed(shape);
 
-        if let Some(modifiers) = modifiers {
-            shape.to_mut().apply_transform(modifiers);
+        if let Some(shape_modifiers) = modifiers.get(&shape.id) {
+            shape.to_mut().apply_transform(shape_modifiers);
         }
 
         let center = shape.center();
@@ -429,8 +436,8 @@ impl RenderState {
 
         match &shape.shape_type {
             Type::SVGRaw(sr) => {
-                if let Some(modifiers) = modifiers {
-                    self.surfaces.canvas(SurfaceId::Fills).concat(modifiers);
+                if let Some(shape_modifiers) = modifiers.get(&shape.id) {
+                    self.surfaces.canvas(SurfaceId::Fills).concat(shape_modifiers);
                 }
                 self.surfaces.canvas(SurfaceId::Fills).concat(&matrix);
                 if let Some(svg) = shape.svg.as_ref() {
@@ -492,6 +499,90 @@ impl RenderState {
 
                 shadows::render_text_inner_shadows(self, &shape, &paragraphs, antialias);
             }
+            Type::Bool(Bool { bool_type, .. }) => {
+                /*
+                let children_ids =
+                    shape.modified_children_ids(structure.get(&shape.id), true);
+
+                let Some(shape_a) = shapes.get(&children_ids[1]) else { return; };
+                let Some(shape_b) = shapes.get(&children_ids[0]) else { return; };
+
+                let shape_a = &mut shape_a.clone();
+                let shape_b = &mut shape_b.clone();
+
+                if let Some(shape_modifiers) = modifiers.get(&shape_a.id) {
+                    shape_a.apply_transform(shape_modifiers);
+                }
+
+                if let Some(shape_modifiers) = modifiers.get(&shape_b.id) {
+                    shape_b.apply_transform(shape_modifiers);
+                }
+                
+                let Type::Path(path_a) = &shape_a.shape_type else { return; };
+                let Type::Path(path_b) = &shape_b.shape_type else { return; };
+                
+                let (segments_a, segments_b) = bools::split_segments(path_a, path_b);
+
+                let segments = match bool_type {
+                    BoolType::Union => bools::union(path_a, segments_a, path_b, segments_b),
+                    BoolType::Difference => bools::difference(path_a, segments_a, path_b, segments_b),
+                    BoolType::Intersection => bools::intersection(path_a, segments_a, path_b, segments_b),
+                    BoolType::Exclusion => bools::exclusion(path_a, segments_a, path_b, segments_b),
+                };
+                
+                let canvas = self.surfaces.canvas(SurfaceId::Strokes);
+                for segment in segments {
+                    let paint = &mut skia::Paint::default();
+                    paint.set_color(skia::Color::RED);
+                    paint.set_style(skia::PaintStyle::Stroke);
+                    canvas.draw_path(&segment.to_skia_path(), paint);
+                }
+
+
+                */
+
+                //////
+
+                let Some(shape) = bools::update_bool_to_path(&shape, shapes, modifiers, structure) else { return; };
+
+                let surface_ids = SurfaceId::Strokes as u32
+                    | SurfaceId::Fills as u32
+                    | SurfaceId::DropShadows as u32
+                    | SurfaceId::InnerShadows as u32;
+                self.surfaces.apply_mut(surface_ids, |s| {
+                    s.canvas().concat(&matrix);
+                });
+
+                let has_fill_none = matches!(
+                    shape.svg_attrs.get("fill").map(String::as_str),
+                    Some("none")
+                );
+
+                if shape.fills.is_empty()
+                    && !matches!(shape.shape_type, Type::Group(_))
+                    && !has_fill_none
+                {
+                    if let Some(fills_to_render) = self.nested_fills.last() {
+                        let fills_to_render = fills_to_render.clone();
+                        for fill in fills_to_render.iter() {
+                            fills::render(self, &shape, fill, antialias);
+                        }
+                    }
+                } else {
+                    for fill in shape.fills().rev() {
+                        fills::render(self, &shape, fill, antialias);
+                    }
+                }
+
+                for stroke in shape.strokes().rev() {
+                    shadows::render_stroke_drop_shadows(self, &shape, stroke, antialias);
+                    strokes::render(self, &shape, stroke, None, None, None, antialias);
+                    shadows::render_stroke_inner_shadows(self, &shape, stroke, antialias);
+                }
+
+                shadows::render_fill_inner_shadows(self, &shape, antialias);
+                shadows::render_fill_drop_shadows(self, &shape, antialias);
+            }
             _ => {
                 let surface_ids = SurfaceId::Strokes as u32
                     | SurfaceId::Fills as u32
@@ -500,6 +591,12 @@ impl RenderState {
                 self.surfaces.apply_mut(surface_ids, |s| {
                     s.canvas().concat(&matrix);
                 });
+
+                let s: Option<Shape> = if let Type::Bool(bool_data) = &shape.shape_type {
+                    bools::update_bool_to_path(&shape, shapes, modifiers, structure)
+                } else {
+                    None
+                };
 
                 let has_fill_none = matches!(
                     shape.svg_attrs.get("fill").map(String::as_str),
@@ -732,9 +829,11 @@ impl RenderState {
     #[inline]
     pub fn render_shape_exit(
         &mut self,
+        tree: &ShapesPool,
+        modifiers: &HashMap<Uuid, Matrix>,
+        structure: &HashMap<Uuid, Vec<StructureEntry>>,
         element: &Shape,
         visited_mask: bool,
-        modifiers: Option<&Matrix>,
         scale_content: Option<&f32>,
     ) {
         if visited_mask {
@@ -796,7 +895,7 @@ impl RenderState {
                 element_fills
                     .to_mut()
                     .set_fills([Fill::Solid(SolidColor(skia::Color::WHITE))].to_vec());
-                self.render_shape(&element_fills, modifiers, scale_content);
+                self.render_shape(&tree, modifiers, structure, &element_fills, scale_content);
 
                 self.surfaces.canvas(SurfaceId::Current).restore();
 
@@ -804,7 +903,7 @@ impl RenderState {
                 let mut element_strokes: Cow<Shape> = Cow::Borrowed(element);
                 element_strokes.to_mut().clear_fills();
                 element_strokes.to_mut().clear_shadows();
-                self.render_shape(&element_strokes, modifiers, scale_content);
+                self.render_shape(&tree, modifiers, structure, &element_strokes, scale_content);
 
                 // TODO: drop shadows. With thos approach actually drop shadows for frames with clipped content are lost.
             }
@@ -882,9 +981,11 @@ impl RenderState {
 
             if visited_children {
                 self.render_shape_exit(
+                    tree,
+                    modifiers,
+                    structure,
                     element,
                     visited_mask,
-                    modifiers.get(&node_id),
                     scale_content.get(&element.id),
                 );
                 continue;
@@ -913,8 +1014,10 @@ impl RenderState {
             self.render_shape_enter(element, mask);
             if !node_render_state.is_root() && self.focus_mode.is_active() {
                 self.render_shape(
+                    tree,
+                    modifiers,
+                    structure,
                     element,
-                    modifiers.get(&element.id),
                     scale_content.get(&element.id),
                 );
             } else if visited_children {
@@ -1184,4 +1287,33 @@ impl RenderState {
     pub fn get_cached_scale(&self) -> f32 {
         self.cached_viewbox.zoom() * self.options.dpr()
     }
+
+    // pub fn draw_points(&mut self, points: &Vec<(skia::Color, Bezier)>) {
+    //     let canvas = self.surfaces.canvas(SurfaceId::Target);
+    //     canvas.save();
+    // 
+    //     let offset_x = self.viewbox.area.left * self.cached_viewbox.zoom * self.options.dpr();
+    //     let offset_y = self.viewbox.area.top * self.cached_viewbox.zoom * self.options.dpr();
+    //     let navigate_zoom = self.viewbox.zoom / self.cached_viewbox.zoom;
+    //     canvas.scale((navigate_zoom, navigate_zoom));
+    // 
+    //     canvas.translate((-offset_x, -offset_y));
+    // 
+    //     for (color, b) in points {
+    //         let paint = &mut skia::Paint::default();
+    //         paint.set_color(*color);
+    //         paint.set_style(skia::PaintStyle::Stroke);
+    //         canvas.draw_path(&b.to_skia_path(), paint);
+    //     }
+    // 
+    //     // for (color, p) in points {
+    //     //     let paint = &mut skia::Paint::default();
+    //     //     paint.set_color(*color);
+    //     //     paint.set_style(skia::PaintStyle::Fill);
+    //     //     canvas.draw_circle((p.x, p.y), 2.0, paint);
+    //     // }
+    // 
+    //     canvas.restore();
+    //     self.flush_and_submit();
+    // }
 }

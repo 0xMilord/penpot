@@ -6,6 +6,7 @@
 
 (ns debug
   (:require
+   [app.render-wasm.api :as wasm.api]
    [app.common.data :as d]
    [app.common.data.macros :as dm]
    [app.common.files.repair :as cfr]
@@ -438,3 +439,8 @@
 (defn ^:export set-shape-ref
   [id shape-ref]
   (st/emit! (set-shape-ref* id shape-ref)))
+
+(defn ^:export test-bools
+  []
+  (let [[s1 s2] (dsh/lookup-selected @st/state)]
+    (wasm.api/test-bools s1 s2)))

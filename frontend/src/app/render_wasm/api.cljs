@@ -721,6 +721,7 @@
         opacity      (dm/get-prop shape :opacity)
         hidden       (dm/get-prop shape :hidden)
         content      (dm/get-prop shape :content)
+        bool-type    (dm/get-prop shape :bool-type)
         grow-type    (dm/get-prop shape :grow-type)
         blur         (dm/get-prop shape :blur)
         corners      (when (some? (dm/get-prop shape :r1))
@@ -747,6 +748,8 @@
       (set-masked masked))
     (when (some? blur)
       (set-shape-blur blur))
+    (when (= type :bool)
+      (set-shape-bool-type bool-type))
     (when (and (some? content)
                (or (= type :path)
                    (= type :bool)))
@@ -1056,6 +1059,14 @@
         column  (aget heapi32 (mem/ptr8->ptr32 (+ offset 4)))]
     (h/call wasm/internal-module "_free_bytes")
     [row column]))
+
+(defn test-bools
+  [id-a id-b]
+  (let [id-a (uuid/get-u32 id-a)
+        id-b (uuid/get-u32 id-b)]
+    (h/call wasm/internal-module "_test_bools"
+            (aget id-a 0) (aget id-a 1) (aget id-a 2) (aget id-a 3)
+            (aget id-b 0) (aget id-b 1) (aget id-b 2) (aget id-b 3))))
 
 (defonce module
   (delay

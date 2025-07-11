@@ -792,6 +792,40 @@ pub extern "C" fn get_grid_coords(pos_x: f32, pos_y: f32) -> *mut u8 {
     mem::write_bytes(bytes)
 }
 
+// #[no_mangle]
+// pub extern "C" fn test_bools(
+//     a1: u32,
+//     b1: u32,
+//     c1: u32,
+//     d1: u32,
+//     a2: u32,
+//     b2: u32,
+//     c2: u32,
+//     d2: u32,
+// ) {
+//     let id_a = uuid_from_u32_quartet(a1, b1, c1, d1);
+//     let id_b = uuid_from_u32_quartet(a2, b2, c2, d2);
+// 
+//     with_state_mut!(state, {
+//         let Some(shape_a) = state.shapes.get(&id_a) else {
+//             return;
+//         };
+//         let Type::Path(path_a) = &shape_a.shape_type else {
+//             return;
+//         };
+//         let Some(shape_b) = state.shapes.get(&id_b) else {
+//             return;
+//         };
+//         let Type::Path(path_b) = &shape_b.shape_type else {
+//             return;
+//         };
+// 
+//         state
+//             .render_state
+//             .draw_points(&math::bools::test_bools(path_a, path_b))
+//     });
+// }
+
 fn main() {
     #[cfg(target_arch = "wasm32")]
     init_gl!();
