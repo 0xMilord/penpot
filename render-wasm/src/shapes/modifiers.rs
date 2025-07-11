@@ -173,7 +173,7 @@ fn propagate_transform(
         if content.grow_type() == GrowType::AutoHeight {
             let mut paragraphs = content.get_skia_paragraphs();
             set_paragraphs_width(shape_bounds_after.width(), &mut paragraphs);
-            let height = auto_height(&paragraphs);
+            let height = auto_height(&mut paragraphs, shape_bounds_after.width());
             let resize_transform = math::resize_matrix(
                 &shape_bounds_after,
                 &shape_bounds_after,
