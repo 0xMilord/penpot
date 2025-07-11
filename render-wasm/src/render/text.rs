@@ -77,7 +77,14 @@ pub fn render(
                             line_height,
                         );
                         if let Some(decoration_rect) = r {
-                            let decoration_paint = text_style.foreground().clone();
+                            // let mut decoration_paint = text_style.foreground().clone();
+                            let decoration_paint = text_style.foreground();
+                            let mut paint = skia_safe::Paint::default();
+                            paint.set_style(skia_safe::PaintStyle::StrokeAndFill);
+                            paint.set_color(decoration_paint.color());
+                            paint.set_stroke(true);
+                            paint.set_stroke_width(decoration_paint.stroke_width());
+                            paint.set_anti_alias(true);
                             canvas.draw_rect(decoration_rect, &decoration_paint);
                         }
                     }

@@ -460,7 +460,7 @@ impl RenderState {
                 });
 
                 let text_content = text_content.new_bounds(shape.selrect());
-                let paragraphs = text_content.get_skia_paragraphs(self.fonts.font_collection());
+                let paragraphs = text_content.get_skia_paragraphs();
 
                 shadows::render_text_drop_shadows(self, &shape, &paragraphs, antialias);
                 text::render(self, &shape, &paragraphs, None);
@@ -472,11 +472,8 @@ impl RenderState {
                 }
 
                 for stroke in shape.strokes().rev() {
-                    let stroke_paragraphs = text_content.get_skia_stroke_paragraphs(
-                        stroke,
-                        &shape.selrect(),
-                        self.fonts.font_collection(),
-                    );
+                    let stroke_paragraphs =
+                        text_content.get_skia_stroke_paragraphs(stroke, &shape.selrect());
                     shadows::render_text_drop_shadows(self, &shape, &stroke_paragraphs, antialias);
                     strokes::render(
                         self,

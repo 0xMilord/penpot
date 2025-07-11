@@ -5,13 +5,13 @@ use crate::{
 use skia_safe::{
     self as skia,
     paint::Paint,
-    textlayout::{FontCollection, ParagraphBuilder, ParagraphStyle},
+    textlayout::{ParagraphBuilder, ParagraphStyle},
 };
 use std::collections::HashSet;
 
 use super::FontFamily;
 use crate::shapes::{self, merge_fills, set_paint_fill, Stroke, StrokeKind};
-use crate::utils::{get_fallback_fonts, uuid_from_u32};
+use crate::utils::{get_fallback_fonts, get_font_collection, uuid_from_u32};
 use crate::wasm::fills::parse_fills_from_bytes;
 use crate::Uuid;
 
@@ -94,7 +94,8 @@ impl TextContent {
         self.paragraphs.push(paragraph);
     }
 
-    pub fn to_paragraphs(&self, fonts: &FontCollection) -> Vec<Vec<skia::textlayout::Paragraph>> {
+    pub fn to_paragraphs(&self) -> Vec<Vec<skia::textlayout::Paragraph>> {
+        let fonts = get_font_collection();
         let fallback_fonts = get_fallback_fonts();
         let mut paragraph_group = Vec::new();
         let paragraphs = self
@@ -104,7 +105,7 @@ impl TextContent {
                 let paragraph_style = p.paragraph_to_style();
                 let mut builder = ParagraphBuilder::new(&paragraph_style, fonts);
                 for leaf in &p.children {
-                    let text_style = leaf.to_style(p, &self.bounds, fallback_fonts); // FIXME
+                    let text_style = leaf.to_style(p, &self.bounds, fallback_fonts);
                     let text = leaf.apply_text_transform();
                     builder.push_style(&text_style);
                     builder.add_text(&text);
@@ -121,11 +122,11 @@ impl TextContent {
         &self,
         stroke: &Stroke,
         bounds: &Rect,
-        fonts: &FontCollection,
     ) -> Vec<Vec<skia::textlayout::Paragraph>> {
         let fallback_fonts = get_fallback_fonts();
         let mut paragraph_group = Vec::new();
         let stroke_paints = get_text_stroke_paints(stroke, bounds);
+        let fonts = get_font_collection();
 
         for stroke_paint in stroke_paints {
             let mut stroke_paragraphs = Vec::new();
@@ -162,20 +163,16 @@ impl TextContent {
         paragraphs
     }
 
-    pub fn get_skia_paragraphs(
-        &self,
-        fonts: &FontCollection,
-    ) -> Vec<Vec<skia::textlayout::Paragraph>> {
-        self.collect_paragraphs(self.to_paragraphs(fonts))
+    pub fn get_skia_paragraphs(&self) -> Vec<Vec<skia::textlayout::Paragraph>> {
+        self.collect_paragraphs(self.to_paragraphs())
     }
 
     pub fn get_skia_stroke_paragraphs(
         &self,
         stroke: &Stroke,
         bounds: &Rect,
-        fonts: &FontCollection,
     ) -> Vec<Vec<skia::textlayout::Paragraph>> {
-        self.collect_paragraphs(self.to_stroke_paragraphs(stroke, bounds, fonts))
+        self.collect_paragraphs(self.to_stroke_paragraphs(stroke, bounds))
     }
 
     pub fn grow_type(&self) -> GrowType {
