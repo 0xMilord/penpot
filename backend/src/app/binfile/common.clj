@@ -715,7 +715,8 @@
           l.revn,
           l.vern,
           l.synced_at,
-          l.is_shared
+          l.is_shared,
+          l.version
      FROM libs AS l
     INNER JOIN project AS p ON (p.id = l.project_id)
     WHERE l.deleted_at IS NULL OR l.deleted_at > now();")
@@ -730,6 +731,8 @@
          (map decode-row-features))
         (db/exec! conn [sql:get-file-libraries file-id])))
 
+;; FIXME: this will use a lot of memory if file uses too many big
+;; libraries, we should load required libraries on demand
 (defn get-resolved-file-libraries
   "A helper for preload file libraries"
   [{:keys [::db/conn] :as cfg} file]

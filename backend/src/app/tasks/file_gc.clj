@@ -143,13 +143,7 @@
     file))
 
 (def ^:private sql:get-files-for-library
-  "SELECT f.id,
-          f.data,
-          f.modified_at,
-          f.features,
-          f.version,
-          f.data_backend,
-          f.data_ref_id
+  "SELECT f.id
      FROM file AS f
      LEFT JOIN file_library_rel AS fl ON (fl.file_id = f.id)
     WHERE fl.library_file_id = ?
@@ -170,12 +164,18 @@
         deleted-components
         (ctkl/deleted-components-seq data)
 
-        xform
+        file-xform
         (mapcat (partial get-used-components deleted-components file-id))
+
+        library-xform
+        (comp
+         (map :id)
+         (map #(bfc/get-file cfg % :realize? true :read-only? true))
+         file-xform)
 
         used-remote
         (->> (db/plan conn [sql:get-files-for-library file-id] {:fetch-size 1})
-             (transduce (comp (map (partial bfc/decode-file cfg)) xform) conj #{}))
+             (transduce library-xform conj #{}))
 
         used-local
         (into #{} xform [file])
@@ -244,7 +244,7 @@
                            :realize? true
                            :skip-locked? true
                            :lock-for-update? true)]
-    ;; FIXME: min-age check
+    ;; FIXME: check if file is not modifies since shedule
     file))
 
 (defn- process-file!
@@ -287,7 +287,7 @@
                     (fn [{:keys [::db/conn] :as cfg}]
                       (let [cfg        (update cfg ::sto/storage sto/configure conn)
                             processed? (process-file! cfg file-id)]
-                        (when (and processed? (= :tiered (cf/get :file-storage-backend)))
+                        (when (and processed? (contains? cf/flags :tiered-file-data-storage))
                           (wrk/submit! (-> cfg
                                            (assoc ::wrk/task :offload-file-data)
                                            (assoc ::wrk/params props)
