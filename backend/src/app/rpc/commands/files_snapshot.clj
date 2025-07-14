@@ -171,7 +171,8 @@
                             :profile-id profile-id
                             :created-by :user})))
 
-(def ^:private sql:get-snapshot
+
+(def ^:private sql:snapshots
   "SELECT c.id,
           c.label,
           c.revn,
@@ -187,9 +188,13 @@
      FROM file_change AS c
      LEFT JOIN file_data AS fd ON (fd.file_id = c.file_id
                                    AND fd.id = c.id
-                                   AND fd.type = 'snapshot')
-    WHERE c.file_id = ?
-      AND c.id = ?")
+                                   AND fd.type = 'snapshot') ")
+
+(def ^:private sql:get-snapshot
+  (str sql:get-snapshots "WHERE c.file_id = ? AND c.id = ?"))
+
+(def ^:private sql:get-snapshots
+  (str sql:get-snapshots "WHERE c.file_id = ?"))
 
 (defn restore-file-snapshot!
   [{:keys [::db/conn ::mbus/msgbus] :as cfg} file-id snapshot-id]

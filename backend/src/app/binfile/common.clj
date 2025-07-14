@@ -244,12 +244,15 @@
            migrate?
            realize?
            decode?
+           skip-locked?
            include-deleted?
+           throw-if-not-exists?
            lock-for-update?]
-    :or {include-deleted? false
-         lock-for-update? false
+    :or {lock-for-update? false
          migrate? true
          decode? true
+         include-deleted? false
+         throw-if-not-exists? true
          realize? false}
     :as options}]
 
@@ -260,25 +263,41 @@
           (str sql:get-file " FOR UPDATE of f")
           sql:get-file)
 
+        sql
+        (if skip-locked?
+          (str sql " SKIP LOCKED")
+          sql)
+
         file
-        (->> (db/get-with-sql conn [sql id]
-                              {::db/check-deleted (not include-deleted?)
-                               ::db/remove-deleted (not include-deleted?)})
-             (feat.fmigr/resolve-applied-migrations cfg)
-             (feat.fdata/resolve-file-data cfg))
+        (db/get-with-sql conn [sql id]
+                         {::db/throw-if-not-exists false
+                          ::db/remove-deleted (not include-deleted?)})]
 
-        will-migrate?
-        (and migrate? (fmg/need-migration? file))]
+    (if file
+      (let [file
+            (->> file
+                 (feat.fmigr/resolve-applied-migrations cfg)
+                 (feat.fdata/resolve-file-data cfg))
 
-    (if decode?
-      (cond->> (feat.fdata/decode-file-data cfg file)
-        (and realize? (not will-migrate?))
-        (feat.fdata/realize cfg)
+            will-migrate?
+            (and migrate? (fmg/need-migration? file))]
 
-        will-migrate?
-        (migrate-file cfg options))
+        (if decode?
+          (cond->> (feat.fdata/decode-file-data cfg file)
+            (and realize? (not will-migrate?))
+            (feat.fdata/realize cfg)
 
-      file)))
+            will-migrate?
+            (migrate-file cfg options))
+
+          file))
+
+      (when-not (or skip-locked? (not throw-if-not-exists?))
+        (ex/raise :type :not-found
+                  :code :object-not-found
+                  :hint "database object not found"
+                  :table :file
+                  :file-id id)))))
 
 (defn get-file
   "Get file, resolve all features and apply migrations.

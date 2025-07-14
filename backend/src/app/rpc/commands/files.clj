@@ -739,7 +739,6 @@
 
   (binding [pmap/*load-fn* (partial feat.fdata/load-pointer cfg file-id)
             pmap/*tracked* (pmap/create-tracked)]
-    ;; FIXME: this needs refactor
     (let [file (-> (bfc/get-file cfg file-id
                                  :include-deleted? true
                                  :lock-for-update? true)
@@ -749,14 +748,12 @@
              :library-id (str (:id ldata))
              :file-id (str file-id))
 
-      (db/update! cfg :file
-                  {:revn (inc (:revn file))
-                   :data (blob/encode (:data file))
-                   :modified-at (dt/now)
-                   :has-media-trimmed false}
-                  {:id file-id})
-
-      (feat.fdata/persist-pointers! cfg file-id))))
+      (bfc/update-file! cfg {:id file-id
+                             :migrations (:migrations file)
+                             :revn (inc (:revn file))
+                             :data (:data file)
+                             :modified-at (dt/now)
+                             :has-media-trimmed false})
 
 (defn- absorb-library
   "Find all files using a shared library, and absorb all library assets

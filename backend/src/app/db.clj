@@ -414,7 +414,7 @@
                :always
                (not-empty))]
 
-    (when (and (not rows) (::check-deleted opts true))
+    (when (and (not rows) (::throw-if-not-exists opts true))
       (ex/raise :type :not-found
                 :code :object-not-found
                 :hint "database object not found"))
