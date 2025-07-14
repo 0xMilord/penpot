@@ -293,17 +293,11 @@
     (feat.fmigr/upsert-migrations! conn file)
     (persist-file! cfg file)))
 
-(def ^:private sql:get-file
-  (str bfc/sql:get-file " FOR KEY SHARE OF f"))
-
 (defn get-file
   "Get not-decoded file, only decodes the features set."
   [cfg id]
-  (let [conn (db/get-connection cfg)
-        file (db/get-with-sql conn [sql:get-file id])]
-    (->> file
-         (feat.fdata/resolve-file-data cfg)
-         (feat.fmigr/resolve-applied-migrations cfg))))
+  ;; FIXME: lock for share
+  (bfc/get-file cfg id :decode? false :lock-for-update? true))
 
 (defn persist-file!
   "Function responsible of persisting already encoded file. Should be

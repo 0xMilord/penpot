@@ -15,7 +15,6 @@
    [app.loggers.audit :as-alias audit]
    [app.loggers.webhooks :as-alias webhooks]
    [app.rpc :as-alias rpc]
-   [app.rpc.commands.files :as files]
    [app.rpc.commands.projects :as projects]
    [app.rpc.commands.teams :as teams]
    [app.rpc.doc :as-alias doc]
@@ -67,7 +66,7 @@
                   {:modified-at (dt/now)}
                   {:id project-id})
 
-      (files/get-file cfg (:id file)))))
+      (bfc/get-file cfg (:id file)))))
 
 (def ^:private schema:create-file
   [:map {:title "create-file"}

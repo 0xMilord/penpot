@@ -15,10 +15,12 @@
    [app.common.types.path :as path]
    [app.db :as db]
    [app.db.sql :as-alias sql]
-   ;; [app.storage :as sto]
    [app.util.blob :as blob]
    [app.util.objects-map :as omap]
-   [app.util.pointer-map :as pmap]))
+   [app.util.pointer-map :as pmap]
+   ;; [app.storage :as sto]
+   [app.worker :as wrk]
+   [promesa.exec :as px]))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;; OFFLOAD
@@ -62,6 +64,15 @@
                           (update-fn objects)
                           objects)))))
     fdata))
+
+
+(defn realize-objects
+  "Process a file and remove all instances of objects mao realizing them
+  to a plain data. Used in operation where is more efficient have the
+  whole file loaded in memory or we going to persist it in an
+  alterantive storage."
+  [_cfg file]
+  (update file :data process-objects (partial into {})))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;; POINTER-MAP
@@ -123,6 +134,14 @@
     (-> fdata
         (d/update-vals update-fn')
         (update :pages-index d/update-vals update-fn'))))
+
+(defn realize-pointers
+  "Process a file and remove all instances of pointers realizing them to
+  a plain data. Used in operation where is more efficient have the
+  whole file loaded in memory."
+  [cfg {:keys [id] :as file}]
+  (binding [pmap/*load-fn* (partial load-pointer cfg id)]
+    (update file :data process-pointers deref)))
 
 (defn get-used-pointer-ids
   "Given a file, return all pointer ids used in the data."
@@ -193,31 +212,38 @@
 ;; STORAGE
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
+(defn realize
+  "A helper that combines realize-pointers and realize-objects"
+  [cfg file]
+  (->> file
+       (realize-pointers cfg)
+       (realize-objects cfg)))
+
 (defn resolve-row
   [{:keys [legacy-data data] :as file}]
-  (if (and (some? legacy-data) (not data))
+  (let [file (if (and (some? legacy-data) (not data))
+               (-> file
+                   (assoc :data legacy-data)
+                   (dissoc :legacy-data))
+               (dissoc file :legacy-data))]
     (-> file
-        (assoc :data legacy-data)
-        (dissoc :legacy-data))
-    (dissoc file :legacy-data)))
-
+        (d/update-when :migrations
+                       (fn [migrations]
+                         (if (db/pgarray? migrations)
+                           (db/decode-pgarray migrations [])
+                           migrations)))
+        (d/update-when :features
+                       (fn [features]
+                         (if (db/pgarray? features)
+                           (db/decode-pgarray features #{})
+                           features))))))
 (defn resolve-file-data
   [_system file]
   (resolve-row file))
 
 ;; FIXME: rename to resolve-file
 (defn decode-file-data
-  [_system file]
+  [{:keys [::wrk/executor]} file]
   (-> file
-      (d/update-when :migrations
-                     (fn [migrations]
-                       (if (db/pgarray? migrations)
-                         (db/decode-pgarray migrations [])
-                         migrations)))
-      (d/update-when :features
-                     (fn [features]
-                       (if (db/pgarray? features)
-                         (db/decode-pgarray features #{})
-                         features)))
-      ;; FIXME: move to separated thread
-      (d/update-when :data blob/decode)))
+      (d/update-when :data (fn [data]
+                             (px/invoke! executor #(blob/decode data))))))

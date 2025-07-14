@@ -24,7 +24,7 @@
    [app.features.file-migrations :as feat.fmigr]
    [app.loggers.audit :as-alias audit]
    [app.loggers.webhooks :as-alias webhooks]
-   ;; [app.storage :as sto]
+   [app.storage :as sto]
    [app.util.blob :as blob]
    [app.util.pointer-map :as pmap]
    [app.util.time :as dt]
@@ -143,14 +143,13 @@
   ([index coll attr]
    (reduce #(index-object %1 %2 attr) index coll)))
 
-(defn decode-row
-  [{:keys [data changes features] :as row}]
+(defn- decode-row-features
+  [{:keys [features] :as row}]
   (when row
     (cond-> row
-      features (assoc :features (db/decode-pgarray features #{}))
-      changes  (assoc :changes (blob/decode changes))
-      data     (assoc :data (blob/decode data)))))
+      (db/pgarray? features) (assoc :features (db/decode-pgarray features #{})))))
 
+;; DEPRECATED
 (defn decode-file
   "A general purpose file decoding function that resolves all external
   pointers, run migrations and return plain vanilla file map"
@@ -194,6 +193,93 @@
     INNER JOIN project AS p ON (p.id = f.project_id)
    WHERE f.id = ?")
 
+(defn- migrate-file
+  [{:keys [::db/conn] :as cfg} {:keys [read-only?]} {:keys [id] :as file}]
+  (binding [pmap/*load-fn* (partial feat.fdata/load-pointer cfg id)
+            pmap/*tracked* (pmap/create-tracked)]
+    (let [libs (delay (get-resolved-file-libraries cfg file))
+          ;; For avoid unnecesary overhead of creating multiple
+          ;; pointers and handly internally with objects map in their
+          ;; worst case (when probably all shapes and all pointers
+          ;; will be readed in any case), we just realize/resolve them
+          ;; before applying the migration to the file.
+          file (->> file
+                    (feat.fdata/realize-pointers cfg)
+                    (feat.fdata/realize-objects cfg))
+          file (fmg/migrate-file file libs)]
+
+      (if (or read-only? (db/read-only? conn))
+        file
+        (let [;; When file is migrated, we break the rule of no
+              ;; perform mutations on get operations and update the
+              ;; file with all migrations applied
+              file (if (contains? (:features file) "fdata/objects-map")
+                     (feat.fdata/enable-objects-map file)
+                     file)
+              file (if (contains? (:features file) "fdata/pointer-map")
+                     (feat.fdata/enable-pointer-map file)
+                     file)]
+
+          (db/update! conn :file-data
+                      {:data (blob/encode (:data file))}
+                      {:file-id id :id id :type "main"}
+                      {::db/return-keys false})
+
+          (db/update! conn :file
+                      {:version (:version file)
+                       :features (into-array (:features file))}
+                      {:id id}
+                      {::db/return-keys false})
+
+          (when (contains? (:features file) "fdata/pointer-map")
+            (feat.fdata/persist-pointers! cfg id))
+
+          (feat.fmigr/upsert-migrations! cfg file)
+          (feat.fmigr/resolve-applied-migrations cfg file))))))
+
+;; FIXME: filter by project-id
+(defn- get-file*
+  [{:keys [::db/conn] :as cfg} id
+   {:keys [#_project-id
+           migrate?
+           realize?
+           decode?
+           include-deleted?
+           lock-for-update?]
+    :or {include-deleted? false
+         lock-for-update? false
+         migrate? true
+         decode? true
+         realize? false}
+    :as options}]
+
+  (assert (db/connection? conn) "expected cfg with valid connection")
+
+  (let [sql
+        (if lock-for-update?
+          (str sql:get-file " FOR UPDATE of f")
+          sql:get-file)
+
+        file
+        (->> (db/get-with-sql conn [sql id]
+                              {::db/check-deleted (not include-deleted?)
+                               ::db/remove-deleted (not include-deleted?)})
+             (feat.fmigr/resolve-applied-migrations cfg)
+             (feat.fdata/resolve-file-data cfg))
+
+        will-migrate?
+        (and migrate? (fmg/need-migration? file))]
+
+    (if decode?
+      (cond->> (feat.fdata/decode-file-data cfg file)
+        (and realize? (not will-migrate?))
+        (feat.fdata/realize cfg)
+
+        will-migrate?
+        (migrate-file cfg options))
+
+      file)))
+
 (defn get-file
   "Get file, resolve all features and apply migrations.
 
@@ -201,11 +287,7 @@
   operations on file, because it removes the ovehead of lazy fetching
   and decoding."
   [cfg file-id & {:as opts}]
-  (db/run! cfg (fn [{:keys [::db/conn] :as cfg}]
-                 (some->> (db/get-with-sql conn [sql:get-file file-id]
-                                           {::db/check-deleted false
-                                            ::db/remove-deleted false})
-                          (decode-file cfg)))))
+  (db/run! cfg get-file* file-id opts))
 
 (defn clean-file-features
   [file]
@@ -229,12 +311,12 @@
   (let [conn (db/get-connection cfg)
         ids  (db/create-array conn "uuid" ids)]
     (->> (db/exec! conn [sql:get-teams ids])
-         (map decode-row))))
+         (map decode-row-features))))
 
 (defn get-team
   [cfg team-id]
   (-> (db/get cfg :team {:id team-id})
-      (decode-row)))
+      (decode-row-features)))
 
 (defn get-fonts
   [cfg team-id]
@@ -536,7 +618,7 @@
   "Update an existing file on the database.
 
   Helper used mainly externally. Returns nil"
-  [{:keys [::db/conn #_::sto/storage] :as cfg} {:keys [id] :as file} & {:as opts}]
+  [{:keys [::db/conn ::sto/storage] :as cfg} {:keys [id] :as file} & {:as opts}]
   (let [file (encode-file cfg file)]
     ;; ;; If file was already offloaded, we touch the underlying storage
     ;; ;; object for properly trigger storage-gc-touched task
@@ -626,7 +708,7 @@
          ;; FIXME: :is-indirect set to false to all rows looks
          ;; completly useless
          (map #(assoc % :is-indirect false))
-         (map decode-row))
+         (map decode-row-features))
         (db/exec! conn [sql:get-file-libraries file-id])))
 
 (defn get-resolved-file-libraries

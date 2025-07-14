@@ -14,7 +14,6 @@
    [app.common.files.validate :as cfv]
    [app.db :as db]
    [app.main :as main]
-   [app.rpc.commands.files :as files]
    [app.rpc.commands.files-snapshot :as fsnap]
    [app.util.time :as dt]))
 
@@ -48,7 +47,7 @@
   ([system id]
    (db/run! system
             (fn [system]
-              (files/get-file system id :migrate? false)))))
+              (bfc/get-file system id :decode? false)))))
 
 (defn update-team!
   [system {:keys [id] :as team}]
