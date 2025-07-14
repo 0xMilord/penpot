@@ -722,7 +722,7 @@
 
 ;; --- MUTATION COMMAND: set-file-shared
 
-(def sql:get-referenced-files
+(def ^:private sql:get-referenced-files
   "SELECT f.id
      FROM file_library_rel AS flr
     INNER JOIN file AS f ON (f.id = flr.file_id)
@@ -733,9 +733,8 @@
 (defn- absorb-library-by-file!
   [cfg ldata file-id]
 
-  (dm/assert!
-   "expected cfg with valid connection"
-   (db/connection-map? cfg))
+  (assert (db/connection-map? cfg)
+          "expected cfg with valid connection")
 
   (binding [pmap/*load-fn* (partial feat.fdata/load-pointer cfg file-id)
             pmap/*tracked* (pmap/create-tracked)]
@@ -753,19 +752,19 @@
                              :revn (inc (:revn file))
                              :data (:data file)
                              :modified-at (dt/now)
-                             :has-media-trimmed false})
+                             :has-media-trimmed false}))))
 
 (defn- absorb-library
   "Find all files using a shared library, and absorb all library assets
   into the file local libraries"
   [cfg {:keys [id data] :as library}]
 
-  (dm/assert!
-   "expected cfg with valid connection"
-   (db/connection-map? cfg))
+  (assert (db/connection-map? cfg)
+          "expected cfg with valid connection")
 
   (let [ids (->> (db/exec! cfg [sql:get-referenced-files id])
-                 (map :id))]
+                 (sequence bfc/xf-map-id))]
+
     (l/trc :hint "absorbing library"
            :library-id (str id)
            :files (str/join "," (map str ids)))

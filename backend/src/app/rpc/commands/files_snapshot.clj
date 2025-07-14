@@ -16,6 +16,7 @@
    [app.db :as db]
    [app.db.sql :as-alias sql]
    [app.features.fdata :as feat.fdata]
+   [app.features.file-snapshots :as fsnap]
    [app.main :as-alias main]
    [app.msgbus :as mbus]
    [app.rpc :as-alias rpc]
@@ -28,31 +29,31 @@
    [app.util.time :as dt]
    [cuerdas.core :as str]))
 
-(defn decode-row
-  [{:keys [migrations] :as row}]
-  (when row
-    (cond-> row
-      (some? migrations)
-      (assoc :migrations (db/decode-pgarray migrations)))))
-
-(def sql:get-file-snapshots
-  "WITH changes AS (
-      SELECT c.id, c.label, c.revn, c.created_at, c.created_by, c.profile_id
-        FROM file_change AS c
-       WHERE c.file_id = ?
-         AND c.label IS NOT NULL
-         AND (deleted_at IS NULL OR deleted_at > now())
-   ), versions AS (
-      (SELECT * FROM changes WHERE created_by = 'system' LIMIT 1000)
-      UNION ALL
-      (SELECT * FROM changes WHERE created_by != 'system' LIMIT 1000)
-   )
-   SELECT * FROM versions
-    ORDER BY created_at DESC;")
+(def ^:private sql:get-snapshots
+  (str "WITH "
+       "snapshots1 AS ( " fsnap/sql:snapshots "),"
+       "snapshots2 AS (
+          SELECT c.id,
+                 c.label,
+                 c.version,
+                 c.created_at,
+                 c.modified_at,
+                 c.created_by,
+                 c.profile_id
+            FROM snapshots1 AS c
+           WHERE c.file_id = ?
+             AND (c.deleted_at IS NULL OR deleted_at > now())
+       ), snapshots3 AS (
+          (SELECT * FROM snapshots2 WHERE created_by = 'system' LIMIT 1000)
+          UNION ALL
+          (SELECT * FROM snapshots2 WHERE created_by != 'system' LIMIT 1000)
+       )
+       SELECT * FROM snapshots3
+        ORDER BY created_at DESC;"))
 
 (defn get-file-snapshots
   [conn file-id]
-  (db/exec! conn [sql:get-file-snapshots file-id]))
+  (db/exec! conn [sql:get-snapshots file-id]))
 
 (def ^:private schema:get-file-snapshots
   [:map {:title "get-file-snapshots"}
@@ -171,31 +172,6 @@
                             :profile-id profile-id
                             :created-by :user})))
 
-
-(def ^:private sql:snapshots
-  "SELECT c.id,
-          c.label,
-          c.revn,
-          c.created_at,
-          c.updated_at AS modified_at,
-          c.profile_id,
-          c.revn,
-          c.features,
-          c.migrations,
-          c.version,
-          c.data AS legacy_data,
-          fd.data AS data
-     FROM file_change AS c
-     LEFT JOIN file_data AS fd ON (fd.file_id = c.file_id
-                                   AND fd.id = c.id
-                                   AND fd.type = 'snapshot') ")
-
-(def ^:private sql:get-snapshot
-  (str sql:get-snapshots "WHERE c.file_id = ? AND c.id = ?"))
-
-(def ^:private sql:get-snapshots
-  (str sql:get-snapshots "WHERE c.file_id = ?"))
-
 (defn restore-file-snapshot!
   [{:keys [::db/conn ::mbus/msgbus] :as cfg} file-id snapshot-id]
   (let [file (files/get-minimal-file conn file-id {::db/for-update true})
@@ -205,9 +181,7 @@
         (sto/resolve cfg {::db/reuse-conn true})
 
         snapshot
-        (some->> (db/get-with-sql conn [sql:get-snapshot file-id snapshot-id])
-                 (feat.fdata/resolve-file-data cfg)
-                 (feat.fdata/decode-file-data cfg))]
+        (fsnap/get-snapshot cfg file-id snapshot-id)]
 
     (when-not snapshot
       (ex/raise :type :not-found
@@ -305,17 +279,6 @@
    [:id ::sm/uuid]
    [:label ::sm/text]])
 
-(defn- update-file-snapshot!
-  [conn {:keys [id file-id label]}]
-  (-> (db/update! conn :file-change
-                  {:label label
-                   :created-by "user"
-                   :deleted-at nil}
-                  {:id id
-                   :file-id file-id}
-                  {::db/return-keys true})
-      (dissoc :data :features :migrations)))
-
 (defn- get-snapshot
   "Get a minimal snapshot from database and lock for update"
   [conn id]
@@ -331,7 +294,7 @@
   [{:keys [::db/conn]} {:keys [::rpc/profile-id id label]}]
   (let [snapshot (get-snapshot conn id)]
     (files/check-edition-permissions! conn profile-id (:file-id snapshot))
-    (update-file-snapshot! conn (assoc snapshot :label label))))
+    (fsnap/update-snapshot! conn (assoc snapshot :label label))))
 
 (def ^:private schema:remove-file-snapshot
   [:map {:title "remove-file-snapshot"}

@@ -17,7 +17,7 @@
    [app.common.logging :as l]
    [app.common.thumbnails :as thc]
    [app.common.types.components-list :as ctkl]
-   [app.rpc.commands.files-snapshot :refer [sql:get-snapshots]]
+   [app.features.file-snapshots :as fsnap]
    [app.common.types.file :as ctf]
    [app.common.types.shape-tree :as ctt]
    [app.config :as cf]
@@ -29,20 +29,6 @@
    [integrant.core :as ig]))
 
 (declare get-file)
-
-(def sql:get-snapshots
-  "SELECT fc.file_id AS id,
-          fc.id AS snapshot_id,
-          fc.data,
-          fc.revn,
-          fc.version,
-          fc.features,
-          fc.data_backend,
-          fc.data_ref_id
-     FROM file_change AS fc
-    WHERE fc.file_id = ?
-      AND fc.data IS NOT NULL
-    ORDER BY fc.created_at ASC")
 
 (def ^:private sql:mark-file-media-object-deleted
   "UPDATE file_media_object
@@ -58,15 +44,8 @@
 (defn- clean-file-media!
   "Performs the garbage collection of file media objects."
   [{:keys [::db/conn] :as cfg} {:keys [id] :as file}]
-  (let [snapshots-xform
-        (comp
-         (map (partial feat.fdata/resolve-file-data cfg))
-         (map (partial feat.fdata/decode-file-data cfg))
-         xf:collect-used-media)
-
-        used-media
-        (->> (db/plan conn [sql:get-snapshots id] {:fetch-size 1})
-             (transduce snapshots-xform conj #{}))
+  (let [used-media
+        (fsnap/reduce-snapshots cfg id xf:collect-used-media conj #{})
 
         used-media
         (into used-media xf:collect-used-media [file])
@@ -78,7 +57,7 @@
         (->> (db/exec! conn [sql:mark-file-media-object-deleted id used-media])
              (into #{} (map :id)))]
 
-    (l/dbg :hint "clean" :rel "file-media-object" :file-id (str id) :total (count unused))
+    (l/dbg :hint "clean" :rel "file-media-object" :file-id (str id) :total (count unused-media))
 
     (doseq [id unused-media]
       (l/trc :hint "mark deleted"
@@ -178,7 +157,7 @@
              (transduce library-xform conj #{}))
 
         used-local
-        (into #{} xform [file])
+        (into #{} file-xform [file])
 
         unused
         (transduce bfc/xf-map-id disj
